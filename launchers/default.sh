@@ -13,8 +13,12 @@ dt-launchfile-init
 # NOTE: Use `dt-exec COMMAND` to run the main process (blocking process)
 
 # launching app
-dt-exec echo "This is an empty launch script. Update it to launch your application."
-
+roscore &
+sleep 5
+dt-exec rosrun localization getmap_server.py &
+echo "Map server runnning..." &
+sleep 5
+dt-exec rosrun localization watcher.py
 
 # ----------------------------------------------------------------------------
 # YOUR CODE ABOVE THIS LINE
