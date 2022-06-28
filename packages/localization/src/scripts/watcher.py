@@ -21,14 +21,18 @@ import cv2
 # Ros libraries
 import roslib
 import rospy
+import tf
 
 # Ros Messages
 from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import PointStamped
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
 
 from localization.msg import DuckPose
 
 VERBOSE=True
+PLOT=False
 
 def get_cars(img):
     """
@@ -58,7 +62,8 @@ class image_feature:
     def __init__(self):
         '''Initialize ros subscriber'''
 
-        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", PointStamped, queue_size=10)
+        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=10)
+        self.odom_broadcaster = tf.TransformBroadcaster()
 
         # subscribed Topic
         self.subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
@@ -81,7 +86,7 @@ class image_feature:
 
         try:
             x, y, t = get_cars(image_np)
-            if VERBOSE:
+            if PLOT:
                 print(x, y, t)
                 cv2.circle(image_np, [int(x),int(y)], 20, [0,0,255], -1)
                 cv2.arrowedLine(image_np, [int(x),int(y)], [int(x-50*np.cos(t)),int(y-50*np.sin(t))], [0,255,0], 5)
@@ -89,12 +94,13 @@ class image_feature:
         except ValueError:
             print("No lines found.")
 
-        cv2.imshow('cv_img', image_np)
-        cv2.waitKey(2)
+        if PLOT:
+            cv2.imshow('cv_img', image_np)
+            cv2.waitKey(2)
 
         pose = DuckPose()
         pose.header.stamp = rospy.Time.now()
-        pose.header.frame_id = "/watchtower00/localization"
+        pose.header.frame_id = "watchtower00/localization"
         if localized:
             pose.x = x
             pose.y = y
@@ -106,7 +112,43 @@ class image_feature:
             pose.t = -1
             pose.success = False
 
-        self.coordinates_pub.publish(pose)
+        # PointStamped:
+        # pose = PointStamped()
+        # pose.header.stamp = rospy.Time.now()
+        # pose.header.frame_id = "/my_frame"
+        # if localized:
+        #     pose.point.x = x
+        #     pose.point.y = y
+        #     pose.point.z = 0
+        # else:
+        #     pose.point.x = -1
+        #     pose.point.y = -1
+        #     pose.point.z = 0
+
+
+        # Odometry:
+        odom_quat = tf.transformations.quaternion_from_euler(0, 0, 360*t/np.pi)
+        self.odom_broadcaster.sendTransform(
+            (x, y, 0.),
+            odom_quat,
+            rospy.Time.now(),
+            "base_link",
+            "odom"
+        )
+
+        # next, we'll publish the odometry message over ROS
+        odom = Odometry()
+        odom.header.stamp = rospy.Time.now()
+        odom.header.frame_id = "odom"
+
+        # set the position
+        odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
+
+        # set the velocity
+        odom.child_frame_id = "base_link"
+        odom.twist.twist = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
+
+        self.coordinates_pub.publish(odom)
 
 
 def main(args):

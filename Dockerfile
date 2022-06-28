@@ -61,6 +61,9 @@ RUN python3 -m pip install  -r ${REPO_PATH}/dependencies-py3.txt
 # copy the source code
 COPY ./packages "${REPO_PATH}/packages"
 
+# Giulio defined
+COPY ./bags "${REPO_PATH}/bags"
+
 # build packages
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
   catkin build \

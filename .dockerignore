@@ -8,5 +8,8 @@
 !dependencies-py3.*
 !launchers
 
+# Giulio defined
+!bags
+
 # YOUR FILES LISTED BELOW THIS LINE (IMPORTANT: PREPEND !)
 # ----------------------------------------------------------------------------
