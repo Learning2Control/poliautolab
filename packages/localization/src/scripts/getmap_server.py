@@ -130,18 +130,18 @@ def get_interpolation(img, no_preprocessing=False, return_origin=False, scaled=F
     return [spline_x, spline_y]
 
 
-def handle_add_two_ints(req):
+def handle_get_map_server(req):
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     res = get_interpolation(img, no_preprocessing=False, method="distance")
     return GetMap(res)
 
-def add_two_ints_server():
+def get_map_server():
     rospy.init_node('get_map_server')
-    s = rospy.Service('get_map', GetMap, handle_add_two_ints)
+    s = rospy.Service('get_map', GetMap, handle_get_map_server)
     print("Ready to send a map.")
     rospy.spin()
 
 if __name__ == "__main__":
-    add_two_ints_server()
+    get_map_server()

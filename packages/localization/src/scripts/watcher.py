@@ -58,7 +58,7 @@ class image_feature:
     def __init__(self):
         '''Initialize ros subscriber'''
 
-        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", PointStamped)
+        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", PointStamped, queue_size=10)
 
         # subscribed Topic
         self.subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
