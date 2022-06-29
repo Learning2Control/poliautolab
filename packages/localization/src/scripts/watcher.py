@@ -57,7 +57,7 @@ def get_cars(img):
     
     return x_center, y_center, angle
 
-class image_feature:
+class ImageFeature:
 
     def __init__(self):
         '''Initialize ros subscriber'''
@@ -85,11 +85,11 @@ class image_feature:
         localized = False
 
         try:
-            x, y, t = get_cars(image_np)
+            x, y, theta = get_cars(image_np)
             if PLOT:
-                print(x, y, t)
+                print(x, y, theta)
                 cv2.circle(image_np, [int(x),int(y)], 20, [0,0,255], -1)
-                cv2.arrowedLine(image_np, [int(x),int(y)], [int(x-50*np.cos(t)),int(y-50*np.sin(t))], [0,255,0], 5)
+                cv2.arrowedLine(image_np, [int(x),int(y)], [int(x-50*np.cos(theta)),int(y-50*np.sin(theta))], [0,255,0], 5)
             localized = True
         except ValueError:
             print("No lines found.")
@@ -104,12 +104,12 @@ class image_feature:
         if localized:
             pose.x = x
             pose.y = y
-            pose.t = t
+            pose.theta = theta
             pose.success = True
         else:
             pose.x = -1
             pose.y = -1
-            pose.t = -1
+            pose.theta = -1
             pose.success = False
 
         # PointStamped:
@@ -127,9 +127,9 @@ class image_feature:
 
 
         # Odometry:
-        odom_quat = tf.transformations.quaternion_from_euler(0, 0, 360*t/np.pi)
+        odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta)
         self.odom_broadcaster.sendTransform(
-            (x, y, 0.),
+            (6 - x/100, y/100, 0.),
             odom_quat,
             rospy.Time.now(),
             "base_link",
@@ -142,7 +142,7 @@ class image_feature:
         odom.header.frame_id = "odom"
 
         # set the position
-        odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
+        odom.pose.pose = Pose(Point(6 - x/100, y/100, 0.), Quaternion(*odom_quat))
 
         # set the velocity
         odom.child_frame_id = "base_link"
@@ -153,7 +153,7 @@ class image_feature:
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    ic = image_feature()
+    ic = ImageFeature()
     rospy.init_node('image_feature', anonymous=True)
     try:
         rospy.spin()
