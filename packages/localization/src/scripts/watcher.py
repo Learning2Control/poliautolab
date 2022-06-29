@@ -25,13 +25,12 @@ import tf
 
 # Ros Messages
 from sensor_msgs.msg import CompressedImage
-from geometry_msgs.msg import PointStamped
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
 
 from localization.msg import DuckPose
 
-VERBOSE=True
+VERBOSE=False
 PLOT=False
 
 def get_cars(img):
@@ -98,6 +97,44 @@ class ImageFeature:
             cv2.imshow('cv_img', image_np)
             cv2.waitKey(2)
 
+        # Rotate and resape
+        # x = image_np.shape[0] - x
+        # y = image_np.shape[1] - y
+        print(image_np.shape)
+        if rospy.has_param('scale_x'):
+            scale_x = rospy.get_param('scale_x')
+            print("X:")
+            print(x)
+            print(scale_x)
+            x = x*scale_x
+            print(x)
+        else:
+            raise ValueError("scale_x not found")
+        if rospy.has_param('scale_y'):
+            scale_y = rospy.get_param('scale_y')
+            y = y*scale_y
+            print("Y:")
+            print(y)
+        else:
+            raise ValueError("scale_y not found")
+        if rospy.has_param('offset_x'):
+            offset_x = rospy.get_param('offset_x')
+            x -= offset_x
+            print("X:")
+            print(x)
+        else:
+            raise ValueError("offset_x not found")
+        if rospy.has_param('offset_y'):
+            offset_y = rospy.get_param('offset_y')
+            y -= offset_y
+            print("Y:")
+            print(y)
+        else:
+            raise ValueError("offset_y not found")
+
+        # Orientamento sorto
+        # theta -= np.pi
+
         pose = DuckPose()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "watchtower00/localization"
@@ -112,24 +149,11 @@ class ImageFeature:
             pose.theta = -1
             pose.success = False
 
-        # PointStamped:
-        # pose = PointStamped()
-        # pose.header.stamp = rospy.Time.now()
-        # pose.header.frame_id = "/my_frame"
-        # if localized:
-        #     pose.point.x = x
-        #     pose.point.y = y
-        #     pose.point.z = 0
-        # else:
-        #     pose.point.x = -1
-        #     pose.point.y = -1
-        #     pose.point.z = 0
-
 
         # Odometry:
         odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta)
         self.odom_broadcaster.sendTransform(
-            (6 - x/100, y/100, 0.),
+            (x, y, 0.),
             odom_quat,
             rospy.Time.now(),
             "base_link",
@@ -142,7 +166,7 @@ class ImageFeature:
         odom.header.frame_id = "odom"
 
         # set the position
-        odom.pose.pose = Pose(Point(6 - x/100, y/100, 0.), Quaternion(*odom_quat))
+        odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
 
         # set the velocity
         odom.child_frame_id = "base_link"

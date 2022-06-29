@@ -3,12 +3,13 @@
 import numpy as np
 import cv2
 
-from localization.srv import GetMap
+from localization.srv import GetMap, GetMapResponse
 import rospy
 from rospy.numpy_msg import numpy_msg
 from sensor_msgs.msg import CompressedImage
 from scipy.interpolate import UnivariateSpline
 # from localization.msg import Floats
+
 
 def sort_xy(x, y, return_origin=False):
     """
@@ -124,10 +125,60 @@ def get_interpolation(img, no_preprocessing=False, return_origin=False, scaled=F
     spline_x = UnivariateSpline(spline_input, x_sorted, k=2, s=s)
     spline_y = UnivariateSpline(spline_input, y_sorted, k=2, s=s)
 
-    if return_origin:
-        return spline_x, spline_y, x_sorted, y_sorted, x0, y0
+    splines = [spline_x, spline_y]
 
-    return [spline_x, spline_y]
+    samples = 500
+
+    if method == "angle":
+        alpha = np.linspace(0, 2*np.pi, samples)
+    elif method == "distance":
+        alpha = np.linspace(0, 1, samples)
+    else:
+        raise ValueError("Unknown method, must be 'angle' or 'distance'")
+
+    points_fitted = np.vstack( spl(alpha) for spl in splines ).T
+
+    return points_fitted
+
+    # if return_origin:
+    #     return spline_x, spline_y, x_sorted, y_sorted, x0, y0
+
+    # return [spline_x, spline_y]
+
+
+def resize_params(points_fitted):
+    """
+    Resize the parameters of the interpolation function.
+
+    :param points_fitted:
+    :return:
+    """
+
+    max_left = np.min(points_fitted[:, 0])
+    max_right = np.max(points_fitted[:, 0])
+    max_bottom = np.min(points_fitted[:, 1])
+    max_top = np.max(points_fitted[:, 1])
+
+    long_side, short_side = 2.36, 1.77
+    env_long_len, env_short_len = 2.925, 2.34
+    env_long_border, env_short_border = env_long_len-long_side/2, env_short_len-short_side/2
+
+    scale_y = short_side / (max_top - max_bottom)
+    scale_x = long_side / (max_right - max_left)
+
+    offset_y = max_bottom*scale_y - env_short_border
+    offset_x = max_left*scale_x - env_long_border
+
+    rospy.set_param('scale_y', float(scale_y))
+    rospy.set_param('scale_x', float(scale_x))
+    rospy.set_param('offset_y', float(offset_y))
+    rospy.set_param('offset_x', float(offset_x))
+
+    points_fitted_resized = points_fitted * np.array([scale_x, scale_y])
+    points_fitted_resized[:, 0] -= offset_x
+    points_fitted_resized[:, 1] -= offset_y
+
+    return points_fitted_resized
 
 
 def handle_get_map_server(req):
@@ -135,7 +186,9 @@ def handle_get_map_server(req):
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     res = get_interpolation(img, no_preprocessing=False, method="distance")
-    return GetMap(res)
+    res_resized = resize_params(res)
+    # MEMO reshape here to be able to send it as a message
+    return GetMapResponse(res_resized.reshape(-1).astype(float).tolist())
 
 def get_map_server():
     rospy.init_node('get_map_server')
