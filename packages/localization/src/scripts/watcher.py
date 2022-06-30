@@ -80,6 +80,8 @@ class ImageFeature:
         #### direct conversion to CV2 ####
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
+        image_np = cv2.flip(image_np, 1)
 
         localized = False
 
@@ -97,38 +99,25 @@ class ImageFeature:
             cv2.imshow('cv_img', image_np)
             cv2.waitKey(2)
 
-        # Rotate and resape
-        # x = image_np.shape[0] - x
-        # y = image_np.shape[1] - y
-        print(image_np.shape)
+        # Rotate and remove offset
         if rospy.has_param('scale_x'):
             scale_x = rospy.get_param('scale_x')
-            print("X:")
-            print(x)
-            print(scale_x)
             x = x*scale_x
-            print(x)
         else:
             raise ValueError("scale_x not found")
         if rospy.has_param('scale_y'):
             scale_y = rospy.get_param('scale_y')
             y = y*scale_y
-            print("Y:")
-            print(y)
         else:
             raise ValueError("scale_y not found")
         if rospy.has_param('offset_x'):
             offset_x = rospy.get_param('offset_x')
             x -= offset_x
-            print("X:")
-            print(x)
         else:
             raise ValueError("offset_x not found")
         if rospy.has_param('offset_y'):
             offset_y = rospy.get_param('offset_y')
             y -= offset_y
-            print("Y:")
-            print(y)
         else:
             raise ValueError("offset_y not found")
 

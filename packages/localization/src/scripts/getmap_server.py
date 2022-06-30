@@ -56,7 +56,7 @@ def get_angles(x, y, x0=None, y0=None):
 
     return angles
 
-def get_interpolation(img, no_preprocessing=False, return_origin=False, scaled=False, method="distance"):
+def get_interpolation(img, no_preprocessing=True, return_origin=False, scaled=False, method="distance"):
     """
     Get the interpolation function of the trajectory of the agent in the environment.
 
@@ -67,13 +67,14 @@ def get_interpolation(img, no_preprocessing=False, return_origin=False, scaled=F
 
     :return: np.array
     """
+    # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
     top_view = img
 
-    img_hsv = cv2.cvtColor(top_view, cv2.COLOR_RGB2HSV)
-    gray = cv2.cvtColor(top_view, cv2.COLOR_RGB2GRAY)
+    img_hsv = cv2.cvtColor(top_view, cv2.COLOR_BGR2HSV)
+    gray = cv2.cvtColor(top_view, cv2.COLOR_BGR2GRAY)
 
-    lower_yellow = np.array([20,100,150])
-    upper_yellow = np.array([30,255,255])
+    lower_yellow = np.array([30,120,200])
+    upper_yellow = np.array([35,180,250])
 
     mask_yellow = cv2.inRange(img_hsv, lower_yellow, upper_yellow)
     mask = cv2.bitwise_and(gray, mask_yellow)
@@ -89,7 +90,7 @@ def get_interpolation(img, no_preprocessing=False, return_origin=False, scaled=F
         rho = 1  # distance resolution in pixels of the Hough grid
         theta = np.pi / 180  # angular resolution in radians of the Hough grid
         threshold = 3  # minimum number of votes (intersections in Hough grid cell)
-        min_line_length = 10  # minimum number of pixels making up a line
+        min_line_length = 5  # minimum number of pixels making up a line
         max_line_gap = 50  # maximum gap in pixels between connectable line segments
 
         lines = cv2.HoughLinesP(edges, rho, theta, threshold, np.array([]), min_line_length, max_line_gap)
@@ -127,7 +128,7 @@ def get_interpolation(img, no_preprocessing=False, return_origin=False, scaled=F
 
     splines = [spline_x, spline_y]
 
-    samples = 500
+    samples = 300
 
     if method == "angle":
         alpha = np.linspace(0, 2*np.pi, samples)
@@ -185,7 +186,7 @@ def handle_get_map_server(req):
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    res = get_interpolation(img, no_preprocessing=False, method="distance")
+    res = get_interpolation(img, no_preprocessing=True, method="distance")
     res_resized = resize_params(res)
     # MEMO reshape here to be able to send it as a message
     return GetMapResponse(res_resized.reshape(-1).astype(float).tolist())
