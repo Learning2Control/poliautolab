@@ -162,7 +162,7 @@ def resize_params(points_fitted):
 
     long_side, short_side = 2.36, 1.77
     env_long_len, env_short_len = 2.925, 2.34
-    env_long_border, env_short_border = env_long_len-long_side/2, env_short_len-short_side/2
+    env_long_border, env_short_border = (env_long_len-long_side)/2, (env_short_len-short_side)/2
 
     scale_y = short_side / (max_top - max_bottom)
     scale_x = long_side / (max_right - max_left)

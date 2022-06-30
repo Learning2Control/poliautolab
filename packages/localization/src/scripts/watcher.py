@@ -81,7 +81,7 @@ class ImageFeature:
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
-        image_np = cv2.flip(image_np, 1)
+        image_np = cv2.flip(image_np, 0)
 
         localized = False
 
@@ -122,7 +122,7 @@ class ImageFeature:
             raise ValueError("offset_y not found")
 
         # Orientamento sorto
-        # theta -= np.pi
+        theta -= np.pi
 
         pose = DuckPose()
         pose.header.stamp = rospy.Time.now()
