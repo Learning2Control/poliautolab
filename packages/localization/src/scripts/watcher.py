@@ -33,9 +33,12 @@ from localization.msg import DuckPose
 VERBOSE=False
 PLOT=False
 
-def get_cars(img):
+def get_car(img):
     """
-    Returns front and left coord
+    Extract the car from the image.
+
+    :param img: image
+    :return: front coord, left coord, theta
     """
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -47,8 +50,8 @@ def get_cars(img):
     hsv_color2_pink = np.array([200, 200, 250])
     mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
     
-    front_coo = np.argwhere(mask_pink==255).mean(axis=0)[::-1]
-    back_coo = np.argwhere(mask_blue==255).mean(axis=0)[::-1]
+    back_coo = np.argwhere(mask_pink==255).mean(axis=0)[::-1]
+    front_coo = np.argwhere(mask_blue==255).mean(axis=0)[::-1]
     
     x_center = (front_coo[0] + back_coo[0])/2
     y_center = (front_coo[1] + back_coo[1])/2
@@ -59,7 +62,9 @@ def get_cars(img):
 class ImageFeature:
 
     def __init__(self):
-        '''Initialize ros subscriber'''
+        """
+        Initialize the ImageFeature class.
+        """
 
         self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=10)
         self.odom_broadcaster = tf.TransformBroadcaster()
@@ -72,8 +77,15 @@ class ImageFeature:
 
 
     def callback(self, ros_data):
-        '''Callback function of subscribed topic. 
-        Here images get converted and features detected'''
+        """
+        Callback function for subscribed topic.
+        Get image and extract position and orientation of Duckiebot.
+        Publish duckiebot position and orientation on /watchtower00/localization.
+
+        :param ros_data: received image
+
+        :type ros_data: sensor_msgs.msg.CompressedImage
+        """
         if VERBOSE :
             print(f'received image of type: "{ros_data.format}"' )
 
@@ -86,7 +98,7 @@ class ImageFeature:
         localized = False
 
         try:
-            x, y, theta = get_cars(image_np)
+            x, y, theta = get_car(image_np)
             if PLOT:
                 print(x, y, theta)
                 cv2.circle(image_np, [int(x),int(y)], 20, [0,0,255], -1)
@@ -121,9 +133,7 @@ class ImageFeature:
         else:
             raise ValueError("offset_y not found")
 
-        # Orientamento sorto
-        theta -= np.pi
-
+        # DuckPose (not published)
         pose = DuckPose()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "watchtower00/localization"
@@ -149,7 +159,6 @@ class ImageFeature:
             "odom"
         )
 
-        # next, we'll publish the odometry message over ROS
         odom = Odometry()
         odom.header.stamp = rospy.Time.now()
         odom.header.frame_id = "odom"
