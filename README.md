@@ -15,3 +15,5 @@ dts devel build -f
 dts devel run
 ```
 Based on ROS, find the scripts inside packages/localization
+
+![rviz](assets/rviz_result.png)
