@@ -15,8 +15,11 @@ dt-launchfile-init
 # launching app
 roscore &
 sleep 2
-printf "Rosbag play\n\n"
-rosbag play -q -l $DT_REPO_PATH/bags/2022-05-16-16-18-59.bag &
+# printf "Rosbag play\n\n"
+# rosbag play -q -l $DT_REPO_PATH/bags/2022-05-16-16-18-59.bag &
+# sleep 2
+ROS_NAMESPACE=watchtower00/camera_node rosrun image_proc image_proc image_raw:=image/compressed
+echo "Image_proc launched"
 sleep 2
 rosrun tf static_transform_publisher 0 0 0 0 0 0 1 map odom 10 &
 printf "Tf done\n\n"
