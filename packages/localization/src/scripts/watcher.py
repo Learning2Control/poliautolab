@@ -48,7 +48,7 @@ def get_car(img):
     # img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    hsv_color1_blue = np.array([50, 200, 50])
+    hsv_color1_blue = np.array([50, 200, 90])
     hsv_color2_blue = np.array([100, 300, 300])
     mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
 

@@ -13,11 +13,11 @@ dt-launchfile-init
 # NOTE: Use `dt-exec COMMAND` to run the main process (blocking process)
 
 # launching app
-# roscore &
-# sleep 2
-# printf "Rosbag play\n\n"
-# rosbag play -q -l $DT_REPO_PATH/bags/2022-05-16-16-18-59.bag --clock &
-# sleep 2
+roscore &
+sleep 2
+printf "Rosbag play\n\n"
+sleep 2
+rosbag play -q -l $DT_REPO_PATH/bags/2022-07-07-13-19-43.bag --clock &
 printf "Rosrun\n\n"
 ROS_NAMESPACE=watchtower00/camera_node rosrun image_proc image_proc image_raw:=image/compressed &
 echo "Image_proc launched"
