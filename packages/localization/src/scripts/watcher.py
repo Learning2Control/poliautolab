@@ -19,6 +19,7 @@ from scipy.ndimage import filters
 import cv2
 
 # Ros libraries
+import message_filters
 import roslib
 import rospy
 import tf
@@ -40,6 +41,11 @@ def get_car(img):
     :param img: image
     :return: front coord, left coord, theta
     """
+    # scale_percent = 60
+    # width = int(img.shape[1] * scale_percent / 100)
+    # height = int(img.shape[0] * scale_percent / 100)
+    # dim = (width, height)
+    # img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
     hsv_color1_blue = np.array([50, 200, 50])
@@ -66,15 +72,31 @@ class ImageFeature:
         Initialize the ImageFeature class.
         """
 
-        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=10)
+        self.rate = rospy.Rate(10)
+
+        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
+        self.coordinates_pub_sync = rospy.Publisher("/watchtower00/localization_sync", Odometry, queue_size=1)
+        self.image_sync = rospy.Publisher("/watchtower00/image_sync", CompressedImage, queue_size=1)
         self.odom_broadcaster = tf.TransformBroadcaster()
 
         # subscribed Topic
-        self.subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
-            CompressedImage, self.callback,  queue_size = 1)
+        # https://stackoverflow.com/questions/33559200/ros-image-subscriber-lag?rq=1
+        self.image_subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
+            CompressedImage, self.callback,  queue_size=1, buff_size=2**24)
+        
+        # Ts
+        self.image_subscriber_msg = message_filters.Subscriber("/watchtower00/camera_node/image/compressed", CompressedImage)
+        self.localization_subscriber_msg = message_filters.Subscriber("/watchtower00/localization", Odometry)
+
+        ts = message_filters.ApproximateTimeSynchronizer([self.image_subscriber_msg, self.localization_subscriber_msg], 20, 10)
+        ts.registerCallback(self.callback_sync)
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
+        self.rate.sleep()
 
+    def callback_sync(self, image_msg, localization_msg):
+        self.coordinates_pub_sync.publish(localization_msg)
+        self.image_sync.publish(image_msg)
 
     def callback(self, ros_data):
         """
@@ -175,8 +197,8 @@ class ImageFeature:
 
 def main(args):
     '''Initializes and cleanup ros node'''
-    ic = ImageFeature()
     rospy.init_node('image_feature', anonymous=True)
+    ic = ImageFeature()
     try:
         rospy.spin()
     except KeyboardInterrupt:

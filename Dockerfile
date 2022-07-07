@@ -7,9 +7,9 @@ ARG ICON="video-camera"
 
 # ==================================================>
 # ==> Do not change the code below this line
-ARG ARCH=arm64v8
+# ARG ARCH=arm64v8
 # I CHANGED THIS SORRY DUCKIE (arm64 is the original)
-# ARG ARCH=arm32v7
+ARG ARCH=arm32v7
 ARG DISTRO=ente
 ARG BASE_TAG=${DISTRO}-${ARCH}
 ARG BASE_IMAGE=dt-ros-commons
