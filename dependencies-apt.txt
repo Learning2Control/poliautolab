@@ -1,3 +1,3 @@
 # LIST YOUR APT PACKAGES HERE
 python3-opencv
-ros-noetic-image-pipeline
+ros-noetic-image-geometry

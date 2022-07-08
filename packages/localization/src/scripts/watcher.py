@@ -13,7 +13,6 @@ import sys, time
 
 # numpy and scipy
 import numpy as np
-from scipy.ndimage import filters
 
 # OpenCV
 import cv2
@@ -25,14 +24,17 @@ import rospy
 import tf
 
 # Ros Messages
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import CameraInfo, CompressedImage
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
+
+from image_geometry import PinholeCameraModel
 
 from localization.msg import DuckPose
 
 VERBOSE=False
 PLOT=False
+PUB_RECT=False
 
 def get_car(img):
     """
@@ -52,8 +54,8 @@ def get_car(img):
     hsv_color2_blue = np.array([100, 300, 300])
     mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
 
-    hsv_color1_pink = np.array([100, 50, 200])
-    hsv_color2_pink = np.array([200, 200, 250])
+    hsv_color1_pink = np.array([150, 50, 200])
+    hsv_color2_pink = np.array([200, 100, 250])
     mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
     
     back_coo = np.argwhere(mask_pink==255).mean(axis=0)[::-1]
@@ -74,22 +76,32 @@ class ImageFeature:
 
         self.rate = rospy.Rate(10)
 
-        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
-        self.coordinates_pub_sync = rospy.Publisher("/watchtower00/localization_sync", Odometry, queue_size=1)
-        self.image_sync = rospy.Publisher("/watchtower00/image_sync", CompressedImage, queue_size=1)
-        self.odom_broadcaster = tf.TransformBroadcaster()
+        self.rectify_alpha = rospy.get_param("~rectify_alpha", 0.0)
+        # camera info
+        self._camera_parameters = None
+        self._mapx, self._mapy = None, None
 
         # subscribed Topic
         # https://stackoverflow.com/questions/33559200/ros-image-subscriber-lag?rq=1
+        self._cinfo_sub = rospy.Subscriber("/watchtower00/camera_node/camera_info",
+            CameraInfo, self._cinfo_cb, queue_size=1)
         self.image_subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
-            CompressedImage, self.callback,  queue_size=1, buff_size=2**24)
+            CompressedImage, self.callback, queue_size=1, buff_size=2**24)
+
+        # Publisher
+        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
+        if PUB_RECT:
+            self.image_pub = rospy.Publisher("/watchtower00/image_rectified/compressed", CompressedImage, queue_size=1)
+        # self.coordinates_pub_sync = rospy.Publisher("/watchtower00/localization_sync", Odometry, queue_size=1)
+        # self.image_sync = rospy.Publisher("/watchtower00/image_sync", CompressedImage, queue_size=1)
+        self.odom_broadcaster = tf.TransformBroadcaster()
         
         # Ts
-        self.image_subscriber_msg = message_filters.Subscriber("/watchtower00/camera_node/image/compressed", CompressedImage)
-        self.localization_subscriber_msg = message_filters.Subscriber("/watchtower00/localization", Odometry)
+        # self.image_subscriber_msg = message_filters.Subscriber("/watchtower00/camera_node/image/compressed", CompressedImage)
+        # self.localization_subscriber_msg = message_filters.Subscriber("/watchtower00/localization", Odometry)
 
-        ts = message_filters.ApproximateTimeSynchronizer([self.image_subscriber_msg, self.localization_subscriber_msg], 20, 10)
-        ts.registerCallback(self.callback_sync)
+        # ts = message_filters.ApproximateTimeSynchronizer([self.image_subscriber_msg, self.localization_subscriber_msg], 20, 10)
+        # ts.registerCallback(self.callback_sync)
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
         self.rate.sleep()
@@ -97,6 +109,37 @@ class ImageFeature:
     def callback_sync(self, image_msg, localization_msg):
         self.coordinates_pub_sync.publish(localization_msg)
         self.image_sync.publish(image_msg)
+
+    def _cinfo_cb(self, msg):
+        """
+        Callback for the camera_info topic, first step to rectification.
+
+        :param msg: camera_info message
+        """
+        self.cinfo = msg
+        self.cinfo_ready = True
+        if VERBOSE :
+            print("subscribed to /camera_info")
+        self.rate.sleep()
+        # create mapx and mapy
+        H, W = msg.height, msg.width
+        # create new camera info
+        self.camera_model = PinholeCameraModel()
+        self.camera_model.fromCameraInfo(msg)
+        # find optimal rectified pinhole camera
+        rect_K, _ = cv2.getOptimalNewCameraMatrix(
+            self.camera_model.K, self.camera_model.D, (W, H), self.rectify_alpha
+        )
+        # store new camera parameters
+        self._camera_parameters = (rect_K[0, 0], rect_K[1, 1], rect_K[0, 2], rect_K[1, 2])
+        # create rectification map
+        self._mapx, self._mapy = cv2.initUndistortRectifyMap(
+            self.camera_model.K, self.camera_model.D, None, rect_K, (W, H), cv2.CV_32FC1
+        )
+        try:
+            self._cinfo_sub.shutdown()
+        except BaseException:
+            pass
 
     def callback(self, ros_data):
         """
@@ -108,12 +151,28 @@ class ImageFeature:
 
         :type ros_data: sensor_msgs.msg.CompressedImage
         """
+        if self._camera_parameters is None:
+            return
+        # make sure we have a rectification map available
+        if self._mapx is None or self._mapy is None:
+            return
+
         if VERBOSE :
             print(f'received image of type: "{ros_data.format}"' )
 
-        #### direct conversion to CV2 ####
+        # To CV
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # Rectify
+        image_np = cv2.remap(image_np, self._mapx, self._mapy, cv2.INTER_NEAREST)
+        if PUB_RECT:
+            #### Create CompressedIamge ####
+            msg = CompressedImage()
+            msg.header.stamp = rospy.Time.now()
+            msg.format = "jpeg"
+            msg.data = np.array(cv2.imencode('.jpg', image_np)[1]).tostring()
+            # Publish new image
+            self.image_pub.publish(msg)
         # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
         image_np = cv2.flip(image_np, 0)
 

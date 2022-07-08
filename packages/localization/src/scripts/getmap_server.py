@@ -6,9 +6,10 @@ import cv2
 from localization.srv import GetMap, GetMapResponse
 import rospy
 from rospy.numpy_msg import numpy_msg
-from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import CameraInfo, CompressedImage
 from scipy.interpolate import UnivariateSpline
 # from localization.msg import Floats
+
 
 
 def sort_xy(x, y, return_origin=False):
@@ -69,6 +70,9 @@ def get_interpolation(img, no_preprocessing=True, return_origin=False, scaled=Fa
     """
     # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
     top_view = img
+
+    # https://github.com/duckietown/dt-core/blob/daffy/packages/complete_image_pipeline/include/complete_image_pipeline/calibrate_extrinsics.py
+    # https://github.com/duckietown/dt-core/blob/daffy/packages/complete_image_pipeline/include/image_processing/rectification.py
 
     img_hsv = cv2.cvtColor(top_view, cv2.COLOR_BGR2HSV)
     gray = cv2.cvtColor(top_view, cv2.COLOR_BGR2GRAY)
@@ -183,6 +187,7 @@ def resize_params(points_fitted):
 
 
 def handle_get_map_server(req):
+    # ros_data = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
