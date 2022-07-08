@@ -5,10 +5,11 @@ import cv2
 
 from localization.srv import GetMap, GetMapResponse
 import rospy
-from rospy.numpy_msg import numpy_msg
 from sensor_msgs.msg import CameraInfo, CompressedImage
 from scipy.interpolate import UnivariateSpline
 # from localization.msg import Floats
+
+from image_geometry import PinholeCameraModel
 
 
 
@@ -185,13 +186,36 @@ def resize_params(points_fitted):
 
     return points_fitted_resized
 
+def get_rectification_params(msg, rectify_alpha=0.0):
+    """
+    Callback for the camera_info topic, first step to rectification.
+
+    :param msg: camera_info message
+    """
+    # create mapx and mapy
+    H, W = msg.height, msg.width
+    # create new camera info
+    camera_model = PinholeCameraModel()
+    camera_model.fromCameraInfo(msg)
+    # find optimal rectified pinhole camera
+    rect_K, _ = cv2.getOptimalNewCameraMatrix(
+        camera_model.K, camera_model.D, (W, H), rectify_alpha
+    )
+    # create rectification map
+    _mapx, _mapy = cv2.initUndistortRectifyMap(
+        camera_model.K, camera_model.D, None, rect_K, (W, H), cv2.CV_32FC1
+    )
+    return _mapx, _mapy
 
 def handle_get_map_server(req):
-    # ros_data = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
+    msg = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
+    _mapx, _mapy = get_rectification_params(msg)
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    res = get_interpolation(img, no_preprocessing=True, method="distance")
+    # Rectify image
+    image_rect = cv2.remap(img, _mapx, _mapy, cv2.INTER_NEAREST)
+    res = get_interpolation(image_rect, no_preprocessing=True, method="distance")
     res_resized = resize_params(res)
     # MEMO reshape here to be able to send it as a message
     return GetMapResponse(res_resized.reshape(-1).astype(float).tolist())

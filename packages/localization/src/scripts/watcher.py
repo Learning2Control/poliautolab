@@ -116,11 +116,8 @@ class ImageFeature:
 
         :param msg: camera_info message
         """
-        self.cinfo = msg
-        self.cinfo_ready = True
         if VERBOSE :
             print("subscribed to /camera_info")
-        self.rate.sleep()
         # create mapx and mapy
         H, W = msg.height, msg.width
         # create new camera info
