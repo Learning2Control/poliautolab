@@ -9,7 +9,7 @@ __author__ =  'Giulio Vaccari <giulio.vaccari at mail.polimi.it>'
 __version__=  '0.1'
 __license__ = 'MIT'
 # Python libs
-import sys, time
+import sys, time, os
 
 # numpy and scipy
 import numpy as np
@@ -22,6 +22,8 @@ import message_filters
 import roslib
 import rospy
 import tf
+
+from duckietown.dtros import DTROS, NodeType
 
 # Ros Messages
 from sensor_msgs.msg import CameraInfo, CompressedImage
@@ -67,12 +69,19 @@ def get_car(img):
     
     return x_center, y_center, angle
 
-class ImageFeature:
+class ImageFeature(DTROS):
 
-    def __init__(self):
+    def __init__(self, node_name):
         """
         Initialize the ImageFeature class.
         """
+
+        # Duck name
+        self.vehicle = os.environ['VEHICLE_NAME']
+
+        # initialize the DTROS parent class
+        # https://github.com/duckietown/dt-ros-commons/blob/daffy/packages/duckietown/include/duckietown/dtros/constants.py
+        super(ImageFeature, self).__init__(node_name=node_name, node_type=NodeType.LOCALIZATION)
 
         self.rate = rospy.Rate(10)
 
@@ -83,15 +92,15 @@ class ImageFeature:
 
         # subscribed Topic
         # https://stackoverflow.com/questions/33559200/ros-image-subscriber-lag?rq=1
-        self._cinfo_sub = rospy.Subscriber("/watchtower00/camera_node/camera_info",
+        self._cinfo_sub = DTROS.Subscriber("/watchtower00/camera_node/camera_info",
             CameraInfo, self._cinfo_cb, queue_size=1)
-        self.image_subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
+        self.image_subscriber = DTROS.Subscriber("/watchtower00/camera_node/image/compressed",
             CompressedImage, self.callback, queue_size=1, buff_size=2**24)
 
         # Publisher
-        self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
+        self.coordinates_pub = DTROS.Publisher("/watchtower00/localization", Odometry, queue_size=1)
         if PUB_RECT:
-            self.image_pub = rospy.Publisher("/watchtower00/image_rectified/compressed", CompressedImage, queue_size=1)
+            self.image_pub = DTROS.Publisher("/watchtower00/image_rectified/compressed", CompressedImage, queue_size=1)
         # self.coordinates_pub_sync = rospy.Publisher("/watchtower00/localization_sync", Odometry, queue_size=1)
         # self.image_sync = rospy.Publisher("/watchtower00/image_sync", CompressedImage, queue_size=1)
         self.odom_broadcaster = tf.TransformBroadcaster()
@@ -254,7 +263,7 @@ class ImageFeature:
 def main(args):
     '''Initializes and cleanup ros node'''
     rospy.init_node('image_feature', anonymous=True)
-    ic = ImageFeature()
+    ic = ImageFeature(node_name='watcher')
     try:
         rospy.spin()
     except KeyboardInterrupt:
