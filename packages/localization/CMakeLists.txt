@@ -162,6 +162,7 @@ include_directories(
 catkin_install_python(PROGRAMS
   src/scripts/watcher.py
   src/scripts/getmap_server.py
+  src/scripts/stream_to_bot.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

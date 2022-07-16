@@ -13,12 +13,12 @@ dt-launchfile-init
 # NOTE: Use `dt-exec COMMAND` to run the main process (blocking process)
 
 # launching app
-# roscore &
-# sleep 2
-# printf "Rosbag play\n\n"
-# sleep 2
-# rosbag play -q -l $DT_REPO_PATH/bags/2022-07-07-13-19-43.bag --clock &
-# sleep 2
+roscore &
+sleep 2
+printf "Rosbag play\n\n"
+sleep 2
+rosbag play -q -l $DT_REPO_PATH/bags/2022-07-07-13-19-43.bag --clock &
+sleep 2
 rosrun localization getmap_server.py &
 printf "Map server runnning...\n\n"
 sleep 2
@@ -30,7 +30,7 @@ sleep 30
 rosservice call /get_map
 printf "Get map called, param server should be updated\n\n"
 sleep 2
-dt-exec rosrun localization watcher.py
+dt-exec rosrun localization stream_to_bot.py
 
 # ----------------------------------------------------------------------------
 # YOUR CODE ABOVE THIS LINE
