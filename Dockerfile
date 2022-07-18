@@ -7,9 +7,9 @@ ARG ICON="video-camera"
 
 # ==================================================>
 # ==> Do not change the code below this line
-# ARG ARCH=arm64v8
+ARG ARCH=arm64v8
 # I CHANGED THIS SORRY DUCKIE (arm64 is the original)
-ARG ARCH=arm32v7
+# ARG ARCH=arm32v7
 ARG DISTRO=ente
 ARG BASE_TAG=${DISTRO}-${ARCH}
 ARG BASE_IMAGE=dt-ros-commons
@@ -50,8 +50,6 @@ ENV DT_LAUNCH_PATH "${LAUNCH_PATH}"
 ENV DT_LAUNCHER "${LAUNCHER}"
 
 # Giulio added, to fix wrong key
-# RUN apt-get install -y curl
-# RUN curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | sudo apt-key add -
 # install apt dependencies
 COPY ./ros.asc "${REPO_PATH}/"
 RUN apt-key add ${REPO_PATH}/ros.asc
@@ -69,7 +67,7 @@ RUN python3 -m pip install  -r ${REPO_PATH}/dependencies-py3.txt
 COPY ./packages "${REPO_PATH}/packages"
 
 # Giulio defined
-COPY ./bags "${REPO_PATH}/bags"
+# COPY ./bags "${REPO_PATH}/bags"
 
 # build packages
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
@@ -80,6 +78,13 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
 COPY ./launchers/. "${LAUNCH_PATH}/"
 COPY ./launchers/default.sh "${LAUNCH_PATH}/"
 RUN dt-install-launchers "${LAUNCH_PATH}"
+
+# Install dt-commons:
+# RUN apt-get update
+# RUN apt-get install -y git
+# RUN git clone https://github.com/duckietown/dt-commons.git
+# RUN python3 -m pip install dt-commons
+
 
 # define default command
 CMD ["bash", "-c", "dt-launcher-${DT_LAUNCHER}"]

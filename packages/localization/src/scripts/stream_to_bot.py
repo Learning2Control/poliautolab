@@ -1,15 +1,15 @@
 #!/usr/bin/env python
+
 """Detects duckiebots from the watchtower using their unique colors.
 
-Publish on watchtower00/localization a PointStamped with the car coordinates.
-
-Edited version of the original example by Simon Halle.
+Publish on watchtower00/localization a DuckPose with the car coordinates.
+Publish using dt_communication.
 """
 __author__ =  'Giulio Vaccari <giulio.vaccari at mail.polimi.it>'
 __version__=  '0.1'
 __license__ = 'MIT'
 # Python libs
-import sys, time, os
+import sys, os
 
 # numpy and scipy
 import numpy as np
