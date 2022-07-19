@@ -149,11 +149,6 @@ def get_interpolation(img, no_preprocessing=True, return_origin=False, scaled=Fa
 
     return points_fitted
 
-    # if return_origin:
-    #     return spline_x, spline_y, x_sorted, y_sorted, x0, y0
-
-    # return [spline_x, spline_y]
-
 
 def resize_params(points_fitted):
     """
@@ -211,20 +206,15 @@ def get_rectification_params(msg, rectify_alpha=0.0):
     return _mapx, _mapy
 
 def process_map():
-    print("Starting map processing...")
     msg = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
-    print("Camera info received")
     _mapx, _mapy = get_rectification_params(msg)
-    print("Rectification done.")
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     # Rectify image
     image_rect = cv2.remap(img, _mapx, _mapy, cv2.INTER_NEAREST)
     res = get_interpolation(image_rect, no_preprocessing=True, method="distance")
-    print("Interpolation done.")
     res_resized = resize_params(res)
-    print("Resizing done.")
     return res_resized.reshape(-1).astype(float).tolist()
 
 def get_map_server():

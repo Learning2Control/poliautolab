@@ -13,23 +13,7 @@ dt-launchfile-init
 # NOTE: Use `dt-exec COMMAND` to run the main process (blocking process)
 
 # launching app
-roscore &
-sleep 2
-printf "Rosbag play\n\n"
-sleep 2
-rosbag play -q -l $DT_REPO_PATH/bags/2022-07-07-13-19-43.bag --clock &
-sleep 2
-rosrun localization getmap_dt_publisher.py &
-printf "Map server runnning...\n\n"
-sleep 2
-rosrun tf static_transform_publisher 0 0 0 0 0 0 1 map odom 10 &
-printf "Tf done\n\n"
-# sleep 5
-# Takes some time to start on the raspberry...
-# sleep 30
-# rosservice call /get_map
-sleep 2
-dt-exec rosrun localization stream_to_bot.py
+roslaunch localization launcher.launch  veh:=$VEHICLE_NAME
 
 # ----------------------------------------------------------------------------
 # YOUR CODE ABOVE THIS LINE

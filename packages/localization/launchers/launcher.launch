@@ -1,0 +1,13 @@
+<launch>
+
+    <node pkg="rosbag" type="play" name="player" output="screen" args="-q -l --clock /code/catkin_ws/src/poliautolab//bags/2022-07-07-13-19-43.bag"/>
+
+    <group ns="$(arg veh)">
+
+        <node pkg="localization" type="getmap_dt_publisher.py" name="map" output="screen"/>
+        <node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="0 0 0 0 0 0 1 map odom 10" />
+        <node pkg="localization" type="stream_to_bot.py" name="localizer" output="screen"/>
+
+    </group>
+
+</launch>

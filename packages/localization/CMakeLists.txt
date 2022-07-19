@@ -55,11 +55,11 @@ add_message_files(
 )
 
 ## Generate services in the 'srv' folder
-add_service_files(
-  FILES
-  GetMap.srv
+# add_service_files(
+#   FILES
+#   GetMap.srv
   # GetMapResponse.srv
-)
+# )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -161,8 +161,6 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  src/scripts/watcher.py
-  src/scripts/getmap_server.py
   src/scripts/stream_to_bot.py
   src/scripts/getmap_dt_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
