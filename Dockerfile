@@ -10,7 +10,7 @@ ARG ICON="video-camera"
 ARG ARCH=arm64v8
 # I CHANGED THIS SORRY DUCKIE (arm64 is the original)
 # ARG ARCH=arm32v7
-ARG DISTRO=ente
+ARG DISTRO=daffy
 ARG BASE_TAG=${DISTRO}-${ARCH}
 ARG BASE_IMAGE=dt-ros-commons
 ARG LAUNCHER=default
@@ -67,7 +67,7 @@ RUN python3 -m pip install  -r ${REPO_PATH}/dependencies-py3.txt
 COPY ./packages "${REPO_PATH}/packages"
 
 # Giulio defined
-# COPY ./bags "${REPO_PATH}/bags"
+COPY ./bags "${REPO_PATH}/bags"
 
 # build packages
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \

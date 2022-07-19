@@ -5,7 +5,6 @@ import time
 import numpy as np
 import cv2
 
-from localization.srv import GetMap, GetMapResponse
 import rospy
 from sensor_msgs.msg import CameraInfo, CompressedImage
 from scipy.interpolate import UnivariateSpline
@@ -146,7 +145,7 @@ def get_interpolation(img, no_preprocessing=True, return_origin=False, scaled=Fa
     else:
         raise ValueError("Unknown method, must be 'angle' or 'distance'")
 
-    points_fitted = np.vstack( spl(alpha) for spl in splines ).T
+    points_fitted = np.vstack( [spl(alpha) for spl in splines] ).T
 
     return points_fitted
 
@@ -211,28 +210,37 @@ def get_rectification_params(msg, rectify_alpha=0.0):
     )
     return _mapx, _mapy
 
-def handle_get_map_server(req):
+def process_map():
+    print("Starting map processing...")
     msg = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
+    print("Camera info received")
     _mapx, _mapy = get_rectification_params(msg)
+    print("Rectification done.")
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     # Rectify image
     image_rect = cv2.remap(img, _mapx, _mapy, cv2.INTER_NEAREST)
     res = get_interpolation(image_rect, no_preprocessing=True, method="distance")
+    print("Interpolation done.")
     res_resized = resize_params(res)
-    # MEMO reshape here to be able to send it as a message
-    publisher = group.Publisher()
-    while True:
-        publisher.publish(res_resized.reshape(-1).astype(float).tolist())
-        time.sleep(1)
-    return GetMapResponse(res_resized.reshape(-1).astype(float).tolist())
+    print("Resizing done.")
+    return res_resized.reshape(-1).astype(float).tolist()
 
 def get_map_server():
-    rospy.init_node('get_map_server')
-    s = rospy.Service('get_map', GetMap, handle_get_map_server)
-    print("Ready to send a map.")
-    rospy.spin()
+    """
+    Compute the map only the first time, than publish it using mudp.
+    """
+    rospy.init_node("send_map")
+    print("Starting map server")
+    map = process_map()
+    print("Map computed")
+    publisher = group.Publisher()
+    msg = Floats(map)
+    while not rospy.is_shutdown():
+        publisher.publish(msg)
+        rospy.sleep(1)
+
 
 if __name__ == "__main__":
     get_map_server()

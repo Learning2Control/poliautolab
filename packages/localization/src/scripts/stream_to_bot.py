@@ -194,28 +194,19 @@ class ImageFeature(DTROS):
             cv2.waitKey(2)
 
         # Rotate and remove offset
-        if rospy.has_param('scale_x'):
-            scale_x = rospy.get_param('scale_x')
-            x = x*scale_x
-        else:
-            raise ValueError("scale_x not found")
-        if rospy.has_param('scale_y'):
-            scale_y = rospy.get_param('scale_y')
-            y = y*scale_y
-        else:
-            raise ValueError("scale_y not found")
-        if rospy.has_param('offset_x'):
-            offset_x = rospy.get_param('offset_x')
-            x -= offset_x
-        else:
-            raise ValueError("offset_x not found")
-        if rospy.has_param('offset_y'):
-            offset_y = rospy.get_param('offset_y')
-            y -= offset_y
-        else:
-            raise ValueError("offset_y not found")
+        scale_x = rospy.get_param('scale_x', 0.005425407359412304)
+        x = x*scale_x
+        scale_y = rospy.get_param('scale_y', 0.0030901948655952406)
+        y = y*scale_y
+        offset_x = rospy.get_param('offset_x', 1.3492280373361594)
+        x -= offset_x
+        offset_y = rospy.get_param('offset_y', 0.8957448504963013)
+        y -= offset_y
 
-        # DuckPose (not published)
+        if not rospy.has_param('offset_x'):
+            print("[STREAM_TO_BOT] params not found")
+
+        # DuckPose
         pose = DuckPose()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "watchtower00/localization"
@@ -229,6 +220,8 @@ class ImageFeature(DTROS):
             pose.y = -1
             pose.theta = -1
             pose.success = False
+
+        # self.coordinates_dt_publish.publish(pose)
 
 
         # Odometry:

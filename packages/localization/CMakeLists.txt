@@ -51,6 +51,7 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
   FILES
   DuckPose.msg
+  Floats.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -163,6 +164,7 @@ catkin_install_python(PROGRAMS
   src/scripts/watcher.py
   src/scripts/getmap_server.py
   src/scripts/stream_to_bot.py
+  src/scripts/getmap_dt_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 
