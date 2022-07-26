@@ -67,7 +67,7 @@ RUN python3 -m pip install  -r ${REPO_PATH}/dependencies-py3.txt
 COPY ./packages "${REPO_PATH}/packages"
 
 # Giulio defined
-COPY ./bags "${REPO_PATH}/bags"
+# COPY ./bags "${REPO_PATH}/bags"
 
 # build packages
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
@@ -79,11 +79,8 @@ COPY ./launchers/. "${LAUNCH_PATH}/"
 COPY ./launchers/default.sh "${LAUNCH_PATH}/"
 RUN dt-install-launchers "${LAUNCH_PATH}"
 
-# Install dt-commons:
-# RUN apt-get update
-# RUN apt-get install -y git
-# RUN git clone https://github.com/duckietown/dt-commons.git
-# RUN python3 -m pip install dt-commons
+# If connected to ethernet
+# RUN route add -net 239.255.0.0 netmask 255.255.240.0 dev eth0
 
 
 # define default command

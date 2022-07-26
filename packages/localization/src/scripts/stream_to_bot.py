@@ -33,7 +33,8 @@ from localization.msg import DuckPose
 from dt_communication_utils import DTCommunicationGroup
 from duckietown.dtros import DTROS, NodeType
 
-group = DTCommunicationGroup('my_group', Odometry)
+# from std_msgs.msg import String
+group = DTCommunicationGroup('position', DuckPose)
 
 VERBOSE=False
 PLOT=False
@@ -92,6 +93,8 @@ class ImageFeature(DTROS):
         self._camera_parameters = None
         self._mapx, self._mapy = None, None
 
+        self.coordinates_dt_publish = group.Publisher()
+
         # subscribed Topic
         # https://stackoverflow.com/questions/33559200/ros-image-subscriber-lag?rq=1
         self._cinfo_sub = rospy.Subscriber("/watchtower00/camera_node/camera_info",
@@ -100,19 +103,14 @@ class ImageFeature(DTROS):
             CompressedImage, self.callback, queue_size=1, buff_size=2**24)
 
         # Publisher
-        self.coordinates_dt_publish = group.Publisher()
         if PUB_ROS:
             self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
+            self.odom_broadcaster = tf.TransformBroadcaster()
         if PUB_RECT:
             self.image_pub = rospy.Publisher("/watchtower00/image_rectified/compressed", CompressedImage, queue_size=1)
-        self.odom_broadcaster = tf.TransformBroadcaster()
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
-        self.rate.sleep()
-
-    def callback_sync(self, image_msg, localization_msg):
-        self.coordinates_pub_sync.publish(localization_msg)
-        self.image_sync.publish(image_msg)
+        # self.rate.sleep()
 
     def _cinfo_cb(self, msg):
         """
@@ -221,41 +219,45 @@ class ImageFeature(DTROS):
             pose.theta = -1
             pose.success = False
 
-        # self.coordinates_dt_publish.publish(pose)
-
+        if VERBOSE:
+            print(f"[Watcher]: publishing x:{pose}")
+        # message = String(data="Hello!")
+        self.coordinates_dt_publish.publish(pose)
 
         # Odometry:
-        odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta)
-        self.odom_broadcaster.sendTransform(
-            (x, y, 0.),
-            odom_quat,
-            rospy.Time.now(),
-            "base_link",
-            "odom"
-        )
-
-        odom = Odometry()
-        odom.header.stamp = rospy.Time.now()
-        odom.header.frame_id = "odom"
-
-        # set the position
-        odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
-
-        # set the velocity
-        odom.child_frame_id = "base_link"
-        odom.twist.twist = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
-
         if PUB_ROS:
-            self.coordinates_pub.publish(odom)
-        self.coordinates_dt_publish.publish(odom)
+            odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta)
+            self.odom_broadcaster.sendTransform(
+                (x, y, 0.),
+                odom_quat,
+                rospy.Time.now(),
+                "base_link",
+                "odom"
+            )
+
+        # odom = Odometry()
+        # odom.header.stamp = rospy.Time.now()
+        # odom.header.frame_id = "odom"
+
+        # # set the position
+        # odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
+
+        # # set the velocity
+        # odom.child_frame_id = "base_link"
+        # odom.twist.twist = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
+
+        # if PUB_ROS:
+        #     self.coordinates_pub.publish(odom)
+        # self.coordinates_dt_publish.publish(odom)
 
 def main(args):
     '''Initializes and cleanup ros node'''
+    print("[Watcher]: Starting...")
     ic = ImageFeature(node_name='watcher')
     try:
         rospy.spin()
     except KeyboardInterrupt:
-        print("Shutting down localization")
+        print("[Watcher]: Shutting down...")
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':

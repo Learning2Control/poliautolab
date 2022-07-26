@@ -207,14 +207,18 @@ def get_rectification_params(msg, rectify_alpha=0.0):
 
 def process_map():
     msg = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
+    print("[GetMap]: Got camera info")
     _mapx, _mapy = get_rectification_params(msg)
     ros_data = rospy.wait_for_message("/watchtower00/camera_node/image/compressed", CompressedImage)
     np_arr = np.frombuffer(ros_data.data, 'u1')
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     # Rectify image
     image_rect = cv2.remap(img, _mapx, _mapy, cv2.INTER_NEAREST)
+    print("[GetMap]: Got mapx and mapy")
     res = get_interpolation(image_rect, no_preprocessing=True, method="distance")
+    print("[GetMap]: Interpolation done")
     res_resized = resize_params(res)
+    print("[GetMap]: Resized")
     return res_resized.reshape(-1).astype(float).tolist()
 
 def get_map_server():
@@ -222,15 +226,15 @@ def get_map_server():
     Compute the map only the first time, than publish it using mudp.
     """
     rospy.init_node("send_map")
-    print("Starting map server")
+    print("[GetMap]: Starting map server")
     map = process_map()
-    print("Map computed")
+    print(map)
+    print("[GetMap]: Map computed")
     publisher = group.Publisher()
     msg = Floats(map)
     while not rospy.is_shutdown():
         publisher.publish(msg)
         rospy.sleep(1)
-
 
 if __name__ == "__main__":
     get_map_server()
