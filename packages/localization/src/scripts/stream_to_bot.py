@@ -38,7 +38,7 @@ group = DTCommunicationGroup('position', DuckPose)
 
 VERBOSE=False
 PLOT=False
-PUB_RECT=False
+PUB_RECT=True
 PUB_ROS=False
 
 def get_car(img):
@@ -185,6 +185,7 @@ class ImageFeature(DTROS):
                 cv2.arrowedLine(image_np, [int(x),int(y)], [int(x-50*np.cos(theta)),int(y-50*np.sin(theta))], [0,255,0], 5)
             localized = True
         except ValueError:
+            localized = False
             print("No lines found.")
 
         if PLOT:

@@ -219,7 +219,10 @@ def process_map():
     print("[GetMap]: Interpolation done")
     res_resized = resize_params(res)
     print("[GetMap]: Resized")
-    return res_resized.reshape(-1).astype(float).tolist()
+    res_flipped = res_resized
+    res_flipped[:,0] = res_resized[:,0].max() - res_resized[:,0]
+    print("[GetMap]: Flipped")
+    return res_flipped.reshape(-1).astype(float).tolist()
 
 def get_map_server():
     """
