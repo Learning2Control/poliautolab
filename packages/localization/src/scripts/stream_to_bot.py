@@ -9,7 +9,7 @@ __author__ =  'Giulio Vaccari <giulio.vaccari at mail.polimi.it>'
 __version__=  '0.1'
 __license__ = 'MIT'
 # Python libs
-import sys, os
+import sys, os, copy
 
 # numpy and scipy
 import numpy as np
@@ -179,15 +179,6 @@ class ImageFeature(DTROS):
         W, H = img.shape[1], img.shape[0]
         print(f"image shape: {W}x{H}")
         img = img[int(H*0.15):int(H*0.78), int(W*0.2):int(W*0.8)]
-        if PUB_RECT:
-            #### Create CompressedImage ####
-            msg = CompressedImage()
-            msg.header.stamp = rospy.Time.now()
-            msg.format = "jpeg"
-            img_to_be_pulished = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            msg.data = np.array(cv2.imencode('.jpg', img_to_be_pulished)[1]).tobytes()
-            # Publish new image
-            self.image_pub.publish(msg)
         # MEMO: Img has origin on top left, after the interpolation it will be rotated of 90 degrees, no need to rotate it back
 
         localized = False
@@ -203,14 +194,25 @@ class ImageFeature(DTROS):
             print("No lines found.")
             localized = False
 
-        if PLOT:
-            cv2.imshow('cv_img', image_np)
-            cv2.waitKey(2)
-
         # Because of the different methods between map creation and localization x and y are flipped
         x, y = y, x
-        
+
         print("x: ", x, "y: ", y)
+
+
+        if PUB_RECT:
+            # NB It is correct wrt to the map, not the image thus we need to flip along y
+            img_to_be_pulished = copy.deepcopy(img)
+            #### Create CompressedImage ####
+            msg = CompressedImage()
+            msg.header.stamp = rospy.Time.now()
+            msg.format = "jpeg"
+            img_to_be_pulished = cv2.rotate(img_to_be_pulished, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            cv2.circle(img_to_be_pulished,(int(x), int(img.shape[1]-y)), 25, (0,255,0))
+            msg.data = np.array(cv2.imencode('.jpg', img_to_be_pulished)[1]).tobytes()
+            # Publish new image
+            self.image_pub.publish(msg)
+
         # Resize and remove offset
         scale_x = rospy.get_param('scale_x', 0.00345041662607739)
         x = x*scale_x
