@@ -37,9 +37,8 @@ from duckietown.dtros import DTROS, NodeType
 group = DTCommunicationGroup('my_position', DuckPose)
 
 VERBOSE=True
-PLOT=False
 PUB_RECT=True
-PUB_ROS=True
+PUB_ROS=False
 
 def get_car(img):
     """
@@ -68,7 +67,8 @@ def get_car(img):
     
     x_center = (front_coo[0] + back_coo[0])/2
     y_center = (front_coo[1] + back_coo[1])/2
-    angle = np.arctan2(-front_coo[1]+back_coo[1], -front_coo[0]+back_coo[0])
+    # In teh angle computation x and y are inverted because of the image coordinate system
+    angle = np.arctan2(-front_coo[0]+back_coo[0], -front_coo[1]+back_coo[1])
     
     return x_center, y_center, angle
 
@@ -103,6 +103,14 @@ class ImageFeature(DTROS):
         self._mapx, self._mapy = None, None
 
         self.coordinates_dt_publish = group.Publisher()
+
+
+        rospy.loginfo('[Watcher]: Waiting for parameter server...')
+        while not rospy.has_param('scale_x'):
+            self.rate.sleep()
+        self.scale_x = rospy.get_param('scale_x', 0.00345041662607739)
+        self.scale_y = rospy.get_param('scale_y', 0.005417244522218992)
+        rospy.loginfo('[Watcher]: Got params.')
 
         # subscribed Topic
         # https://stackoverflow.com/questions/33559200/ros-image-subscriber-lag?rq=1
@@ -177,7 +185,6 @@ class ImageFeature(DTROS):
         img = white_balance(remapped)
         # Cut image
         W, H = img.shape[1], img.shape[0]
-        print(f"image shape: {W}x{H}")
         img = img[int(H*0.15):int(H*0.78), int(W*0.2):int(W*0.8)]
         # MEMO: Img has origin on top left, after the interpolation it will be rotated of 90 degrees, no need to rotate it back
 
@@ -214,17 +221,15 @@ class ImageFeature(DTROS):
             self.image_pub.publish(msg)
 
         # Resize and remove offset
-        scale_x = rospy.get_param('scale_x', 0.00345041662607739)
-        x = x*scale_x
-        scale_y = rospy.get_param('scale_y', 0.005417244522218992)
-        y = y*scale_y
+        x = x*self.scale_x
+        y = y*self.scale_y
         # offset_x = rospy.get_param('offset_x', 0.3598180360213129)
         # x -= offset_x
         # offset_y = rospy.get_param('offset_y', 0.07411439522846053)
         # y -= offset_y
 
-        if not rospy.has_param('offset_x'):
-            print("[STREAM_TO_BOT] params not found")
+        # if not rospy.has_param('offset_x'):
+        #     print("[STREAM_TO_BOT] params not found")
 
         # DuckPose
         pose = DuckPose()
