@@ -14,7 +14,7 @@ from image_geometry import PinholeCameraModel
 
 from dt_communication_utils import DTCommunicationGroup
 
-group = DTCommunicationGroup('map', Floats)
+group = DTCommunicationGroup('my_map', Floats)
 
 def sort_xy(x, y, return_origin=False):
     """
@@ -163,6 +163,11 @@ def resize_params(points_fitted):
     max_bottom = np.min(points_fitted[:, 1])
     max_top = np.max(points_fitted[:, 1])
 
+    print("MAX Y: {}".format(max_top))
+    print("MAX X: {}".format(max_right))
+    print("MIN Y: {}".format(max_bottom))
+    print("MIN X: {}".format(max_left))
+
     long_side, short_side = 2.36, 1.77
     env_long_len, env_short_len = 2.925, 2.34
     env_long_border, env_short_border = (env_long_len-long_side)/2, (env_short_len-short_side)/2
@@ -205,6 +210,15 @@ def get_rectification_params(msg, rectify_alpha=0.0):
     )
     return _mapx, _mapy
 
+def white_balance(img):
+    result = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+    avg_a = np.average(result[:, :, 1])
+    avg_b = np.average(result[:, :, 2])
+    result[:, :, 1] = result[:, :, 1] - ((avg_a - 128) * (result[:, :, 0] / 255.0) * 1.1)
+    result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
+    result = cv2.cvtColor(result, cv2.COLOR_LAB2RGB)
+    return result
+
 def process_map():
     msg = rospy.wait_for_message("/watchtower00/camera_node/camera_info", CameraInfo)
     print("[GetMap]: Got camera info")
@@ -214,14 +228,19 @@ def process_map():
     img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     # Rectify image
     image_rect = cv2.remap(img, _mapx, _mapy, cv2.INTER_NEAREST)
-    print("[GetMap]: Got mapx and mapy")
-    res = get_interpolation(image_rect, no_preprocessing=True, method="distance")
+    print("[GetMap]: Remapped")
+    img_wb = white_balance(image_rect)
+    print("[GetMap]: White balanced")
+    W, H = img_wb.shape[0], img_wb.shape[1]
+    img_cutted = img_wb[int(W*0.15):int(W*0.78), int(H*0.2):int(H*0.8)]
+    print("[GetMap]: Cutted")
+    res = get_interpolation(img_cutted, no_preprocessing=True, method="distance")
     print("[GetMap]: Interpolation done")
     res_resized = resize_params(res)
     print("[GetMap]: Resized")
     res_flipped = res_resized
-    res_flipped[:,0] = res_resized[:,0].max() - res_resized[:,0]
-    print("[GetMap]: Flipped")
+    # res_flipped[:,0] = res_resized[:,0].max() - res_resized[:,0]
+    # print("[GetMap]: Flipped")
     return res_flipped.reshape(-1).astype(float).tolist()
 
 def get_map_server():

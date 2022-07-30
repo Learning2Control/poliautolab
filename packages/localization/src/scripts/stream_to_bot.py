@@ -34,7 +34,7 @@ from dt_communication_utils import DTCommunicationGroup
 from duckietown.dtros import DTROS, NodeType
 
 # from std_msgs.msg import String
-group = DTCommunicationGroup('position', DuckPose)
+group = DTCommunicationGroup('my_position', DuckPose)
 
 VERBOSE=False
 PLOT=False
@@ -72,6 +72,15 @@ def get_car(img):
     
     return x_center, y_center, angle
 
+def white_balance(img):
+    result = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    avg_a = np.average(result[:, :, 1])
+    avg_b = np.average(result[:, :, 2])
+    result[:, :, 1] = result[:, :, 1] - ((avg_a - 128) * (result[:, :, 0] / 255.0) * 1.1)
+    result[:, :, 2] = result[:, :, 2] - ((avg_b - 128) * (result[:, :, 0] / 255.0) * 1.1)
+    result = cv2.cvtColor(result, cv2.COLOR_LAB2BGR)
+    return result
+
 class ImageFeature(DTROS):
 
     def __init__(self, node_name):
@@ -100,7 +109,7 @@ class ImageFeature(DTROS):
         self._cinfo_sub = rospy.Subscriber("/watchtower00/camera_node/camera_info",
             CameraInfo, self._cinfo_cb, queue_size=1)
         self.image_subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
-            CompressedImage, self.callback, queue_size=1, buff_size=2**24)
+            CompressedImage, self._img_cb, queue_size=1, buff_size=2**24)
 
         # Publisher
         if PUB_ROS:
@@ -140,7 +149,7 @@ class ImageFeature(DTROS):
         except BaseException:
             pass
 
-    def callback(self, ros_data):
+    def _img_cb(self, ros_data):
         """
         Callback function for subscribed topic.
         Get image and extract position and orientation of Duckiebot.
@@ -163,26 +172,27 @@ class ImageFeature(DTROS):
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         # Rectify
-        image_np = cv2.remap(image_np, self._mapx, self._mapy, cv2.INTER_NEAREST)
+        remapped = cv2.remap(image_np, self._mapx, self._mapy, cv2.INTER_NEAREST)
+        # White balance
+        img = white_balance(remapped)
+        # Cut image
+        W, H = img.shape[0], img.shape[1]
+        img = img[int(W*0.15):int(W*0.78), int(H*0.2):int(H*0.8)]
         if PUB_RECT:
-            #### Create CompressedIamge ####
+            #### Create CompressedImage ####
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
-            msg.data = np.array(cv2.imencode('.jpg', image_np)[1]).tostring()
+            msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
             # Publish new image
             self.image_pub.publish(msg)
         # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
-        image_np = cv2.flip(image_np, 0)
+        # image_np = cv2.flip(image_np, 0)
 
         localized = False
 
         try:
-            x, y, theta = get_car(image_np)
-            if PLOT:
-                print(x, y, theta)
-                cv2.circle(image_np, [int(x),int(y)], 20, [0,0,255], -1)
-                cv2.arrowedLine(image_np, [int(x),int(y)], [int(x-50*np.cos(theta)),int(y-50*np.sin(theta))], [0,255,0], 5)
+            x, y, theta = get_car(img)
             localized = True
         except ValueError:
             localized = False
@@ -192,14 +202,15 @@ class ImageFeature(DTROS):
             cv2.imshow('cv_img', image_np)
             cv2.waitKey(2)
 
+        print("x: ", x, "y: ", y)
         # Rotate and remove offset
-        scale_x = rospy.get_param('scale_x', 0.005425407359412304)
+        scale_x = rospy.get_param('scale_x')#, 0.008067309824862449)
         x = x*scale_x
-        scale_y = rospy.get_param('scale_y', 0.0030901948655952406)
+        scale_y = rospy.get_param('scale_y')#, 0.007773726363232902)
         y = y*scale_y
-        offset_x = rospy.get_param('offset_x', 1.3492280373361594)
+        offset_x = rospy.get_param('offset_x')#, 1.5960317232464476)
         x -= offset_x
-        offset_y = rospy.get_param('offset_y', 0.8957448504963013)
+        offset_y = rospy.get_param('offset_y')#, 5.179914391009388)
         y -= offset_y
 
         if not rospy.has_param('offset_x'):
