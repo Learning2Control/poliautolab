@@ -36,10 +36,10 @@ from duckietown.dtros import DTROS, NodeType
 # from std_msgs.msg import String
 group = DTCommunicationGroup('my_position', DuckPose)
 
-VERBOSE=False
+VERBOSE=True
 PLOT=False
 PUB_RECT=True
-PUB_ROS=False
+PUB_ROS=True
 
 def get_car(img):
     """
@@ -176,18 +176,19 @@ class ImageFeature(DTROS):
         # White balance
         img = white_balance(remapped)
         # Cut image
-        W, H = img.shape[0], img.shape[1]
-        img = img[int(W*0.15):int(W*0.78), int(H*0.2):int(H*0.8)]
+        W, H = img.shape[1], img.shape[0]
+        print(f"image shape: {W}x{H}")
+        img = img[int(H*0.15):int(H*0.78), int(W*0.2):int(W*0.8)]
         if PUB_RECT:
             #### Create CompressedImage ####
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
-            msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
+            img_to_be_pulished = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            msg.data = np.array(cv2.imencode('.jpg', img_to_be_pulished)[1]).tobytes()
             # Publish new image
             self.image_pub.publish(msg)
-        # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
-        # image_np = cv2.flip(image_np, 0)
+        # MEMO: Img has origin on top left, after the interpolation it will be rotated of 90 degrees, no need to rotate it back
 
         localized = False
 
@@ -197,21 +198,28 @@ class ImageFeature(DTROS):
         except ValueError:
             localized = False
             print("No lines found.")
+        
+        if x is np.nan or y is np.nan or theta is np.nan:
+            print("No lines found.")
+            localized = False
 
         if PLOT:
             cv2.imshow('cv_img', image_np)
             cv2.waitKey(2)
 
+        # Because of the different methods between map creation and localization x and y are flipped
+        x, y = y, x
+        
         print("x: ", x, "y: ", y)
-        # Rotate and remove offset
-        scale_x = rospy.get_param('scale_x')#, 0.008067309824862449)
+        # Resize and remove offset
+        scale_x = rospy.get_param('scale_x', 0.00345041662607739)
         x = x*scale_x
-        scale_y = rospy.get_param('scale_y')#, 0.007773726363232902)
+        scale_y = rospy.get_param('scale_y', 0.005417244522218992)
         y = y*scale_y
-        offset_x = rospy.get_param('offset_x')#, 1.5960317232464476)
-        x -= offset_x
-        offset_y = rospy.get_param('offset_y')#, 5.179914391009388)
-        y -= offset_y
+        # offset_x = rospy.get_param('offset_x', 0.3598180360213129)
+        # x -= offset_x
+        # offset_y = rospy.get_param('offset_y', 0.07411439522846053)
+        # y -= offset_y
 
         if not rospy.has_param('offset_x'):
             print("[STREAM_TO_BOT] params not found")
@@ -232,8 +240,7 @@ class ImageFeature(DTROS):
             pose.success = False
 
         if VERBOSE:
-            print(f"[Watcher]: publishing x:{pose}")
-        # message = String(data="Hello!")
+            print(f"[Watcher]: publishing x:{x}, y:{y}, theta:{np.rad2deg(theta)}")
         self.coordinates_dt_publish.publish(pose)
 
         # Odometry:
@@ -247,20 +254,18 @@ class ImageFeature(DTROS):
                 "odom"
             )
 
-        # odom = Odometry()
-        # odom.header.stamp = rospy.Time.now()
-        # odom.header.frame_id = "odom"
+            odom = Odometry()
+            odom.header.stamp = rospy.Time.now()
+            odom.header.frame_id = "odom"
 
-        # # set the position
-        # odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
+            # set the position
+            odom.pose.pose = Pose(Point(x, y, 0.), Quaternion(*odom_quat))
 
-        # # set the velocity
-        # odom.child_frame_id = "base_link"
-        # odom.twist.twist = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
+            # set the velocity
+            odom.child_frame_id = "base_link"
+            odom.twist.twist = Twist(Vector3(0, 0, 0), Vector3(0, 0, 0))
 
-        # if PUB_ROS:
-        #     self.coordinates_pub.publish(odom)
-        # self.coordinates_dt_publish.publish(odom)
+            self.coordinates_pub.publish(odom)
 
 def main(args):
     '''Initializes and cleanup ros node'''

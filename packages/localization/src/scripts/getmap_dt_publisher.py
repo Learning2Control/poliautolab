@@ -72,44 +72,18 @@ def get_interpolation(img, no_preprocessing=True, return_origin=False, scaled=Fa
 
     :return: np.array
     """
-    # Img has origin on top left, after the interpolation it will be rotated of 90 degrees, need to prevent that
-    top_view = img
 
     # https://github.com/duckietown/dt-core/blob/daffy/packages/complete_image_pipeline/include/complete_image_pipeline/calibrate_extrinsics.py
     # https://github.com/duckietown/dt-core/blob/daffy/packages/complete_image_pipeline/include/image_processing/rectification.py
 
-    img_hsv = cv2.cvtColor(top_view, cv2.COLOR_BGR2HSV)
-    gray = cv2.cvtColor(top_view, cv2.COLOR_BGR2GRAY)
+    img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    lower_yellow = np.array([30,120,200])
-    upper_yellow = np.array([35,180,250])
+    hsv_color1_yellow = np.array([30,70,170])
+    hsv_color2_yellow = np.array([40,250,250])
+    mask_yellow = cv2.inRange(img_hsv, hsv_color1_yellow, hsv_color2_yellow)
 
-    mask_yellow = cv2.inRange(img_hsv, lower_yellow, upper_yellow)
-    mask = cv2.bitwise_and(gray, mask_yellow)
-
-    if not no_preprocessing:
-        kernel = np.ones((4, 4), np.uint8)
-        eroded = cv2.erode(mask, kernel) 
-
-        low_threshold = 89
-        high_threshold = 80
-        edges = cv2.Canny(eroded, low_threshold, high_threshold)
-
-        rho = 1  # distance resolution in pixels of the Hough grid
-        theta = np.pi / 180  # angular resolution in radians of the Hough grid
-        threshold = 3  # minimum number of votes (intersections in Hough grid cell)
-        min_line_length = 5  # minimum number of pixels making up a line
-        max_line_gap = 50  # maximum gap in pixels between connectable line segments
-
-        lines = cv2.HoughLinesP(edges, rho, theta, threshold, np.array([]), min_line_length, max_line_gap)
-
-        _points = lines.reshape(-1, 2)
-
-        x, y = _points.T
-
-    else:
-        x_all, y_all = np.nonzero(mask)
-        x, y = x_all, y_all
+    x_all, y_all = np.nonzero(mask_yellow)
+    x, y = x_all, y_all
 
     x_sorted, y_sorted, x0, y0 = sort_xy(x, y, return_origin=True)
 
@@ -129,7 +103,7 @@ def get_interpolation(img, no_preprocessing=True, return_origin=False, scaled=Fa
     else:
         raise ValueError("Unknown method, must be 'angle' or 'distance'")
 
-    s = 0.006 if scaled else 0.01
+    s = 0.01
 
     spline_x = UnivariateSpline(spline_input, x_sorted, k=2, s=s)
     spline_y = UnivariateSpline(spline_input, y_sorted, k=2, s=s)
@@ -158,6 +132,8 @@ def resize_params(points_fitted):
     :return:
     """
 
+    # MEMO for dumb kids: x is row [1] and y is column [0]
+
     max_left = np.min(points_fitted[:, 0])
     max_right = np.max(points_fitted[:, 0])
     max_bottom = np.min(points_fitted[:, 1])
@@ -172,11 +148,11 @@ def resize_params(points_fitted):
     env_long_len, env_short_len = 2.925, 2.34
     env_long_border, env_short_border = (env_long_len-long_side)/2, (env_short_len-short_side)/2
 
-    scale_y = short_side / (max_top - max_bottom)
-    scale_x = long_side / (max_right - max_left)
+    scale_x = short_side / (max_top - max_bottom)
+    scale_y = long_side / (max_right - max_left)
 
-    offset_y = max_bottom*scale_y - env_short_border
-    offset_x = max_left*scale_x - env_long_border
+    offset_x = max_bottom*scale_y - env_short_border
+    offset_y = max_left*scale_x - env_long_border
 
     rospy.set_param('scale_y', float(scale_y))
     rospy.set_param('scale_x', float(scale_x))
@@ -184,8 +160,8 @@ def resize_params(points_fitted):
     rospy.set_param('offset_x', float(offset_x))
 
     points_fitted_resized = points_fitted * np.array([scale_x, scale_y])
-    points_fitted_resized[:, 0] -= offset_x
-    points_fitted_resized[:, 1] -= offset_y
+    # points_fitted_resized[:, 0] -= offset_x
+    # points_fitted_resized[:, 1] -= offset_y
 
     return points_fitted_resized
 
@@ -231,10 +207,11 @@ def process_map():
     print("[GetMap]: Remapped")
     img_wb = white_balance(image_rect)
     print("[GetMap]: White balanced")
-    W, H = img_wb.shape[0], img_wb.shape[1]
-    img_cutted = img_wb[int(W*0.15):int(W*0.78), int(H*0.2):int(H*0.8)]
+    W, H = img_wb.shape[1], img_wb.shape[0]
+    img_cutted = img_wb[int(H*0.15):int(H*0.78), int(W*0.2):int(W*0.8)]
     print("[GetMap]: Cutted")
     res = get_interpolation(img_cutted, no_preprocessing=True, method="distance")
+    print(list(res.reshape(-1)))
     print("[GetMap]: Interpolation done")
     res_resized = resize_params(res)
     print("[GetMap]: Resized")

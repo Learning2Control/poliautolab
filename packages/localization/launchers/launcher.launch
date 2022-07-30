@@ -1,5 +1,7 @@
 <launch>
 
+    <node pkg="rosbag" type="play" name="player" output="screen" args="--clock -l -q /code/catkin_ws/src/poliautolab/bags/2022-07-29-17-32-29.bag"/>
+
     <group ns="$(arg veh)">
 
         <node pkg="localization" type="getmap_dt_publisher.py" name="map" output="screen"/>
