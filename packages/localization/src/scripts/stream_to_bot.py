@@ -36,8 +36,8 @@ from duckietown.dtros import DTROS, NodeType
 # from std_msgs.msg import String
 group = DTCommunicationGroup('my_position', DuckPose)
 
-VERBOSE=True
-PUB_RECT=True
+VERBOSE=False
+PUB_RECT=False
 PUB_ROS=False
 
 def get_car(img):
@@ -54,11 +54,11 @@ def get_car(img):
     # img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    hsv_color1_blue = np.array([50, 200, 90])
-    hsv_color2_blue = np.array([100, 300, 300])
+    hsv_color1_blue = np.array([80, 180, 110])
+    hsv_color2_blue = np.array([200, 250, 250])
     mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
 
-    hsv_color1_pink = np.array([150, 50, 200])
+    hsv_color1_pink = np.array([150, 50, 100])
     hsv_color2_pink = np.array([200, 100, 250])
     mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
     
@@ -67,7 +67,10 @@ def get_car(img):
     
     x_center = (front_coo[0] + back_coo[0])/2
     y_center = (front_coo[1] + back_coo[1])/2
-    # In teh angle computation x and y are inverted because of the image coordinate system
+
+    if np.isnan(x_center):
+        print(front_coo[0], back_coo[0])
+    # In the angle computation x and y are inverted because of the image coordinate system
     angle = np.arctan2(-front_coo[0]+back_coo[0], -front_coo[1]+back_coo[1])
     
     return x_center, y_center, angle
@@ -167,14 +170,9 @@ class ImageFeature(DTROS):
 
         :type ros_data: sensor_msgs.msg.CompressedImage
         """
-        if self._camera_parameters is None:
-            return
         # make sure we have a rectification map available
-        if self._mapx is None or self._mapy is None:
+        if self._camera_parameters is None or self._mapx is None or self._mapy is None:
             return
-
-        if VERBOSE :
-            print(f'received image of type: "{ros_data.format}"' )
 
         # To CV
         np_arr = np.frombuffer(ros_data.data, 'u1')
@@ -197,14 +195,15 @@ class ImageFeature(DTROS):
             localized = False
             print("No lines found.")
         
-        if x is np.nan or y is np.nan or theta is np.nan:
+        if np.isnan(x) or np.isnan(y) or np.isnan(theta):
             print("No lines found.")
             localized = False
 
         # Because of the different methods between map creation and localization x and y are flipped
         x, y = y, x
 
-        print("x: ", x, "y: ", y)
+        if VERBOSE:
+            print("Pixel: x: ", x, "y: ", y)
 
 
         if PUB_RECT:
@@ -235,19 +234,12 @@ class ImageFeature(DTROS):
         pose = DuckPose()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = "watchtower00/localization"
-        if localized:
-            pose.x = x
-            pose.y = y
-            pose.theta = theta
-            pose.success = True
-        else:
-            pose.x = -1
-            pose.y = -1
-            pose.theta = -1
-            pose.success = False
+        pose.x = x
+        pose.y = y
+        pose.theta = theta
+        pose.success = localized
 
-        if VERBOSE:
-            print(f"[Watcher]: publishing x:{x}, y:{y}, theta:{np.rad2deg(theta)}")
+        print(f"[Watcher]: publishing x:{x}, y:{y}, theta:{np.rad2deg(theta)}")
         self.coordinates_dt_publish.publish(pose)
 
         # Odometry:
@@ -274,7 +266,7 @@ class ImageFeature(DTROS):
 
             self.coordinates_pub.publish(odom)
 
-def main(args):
+def main():
     '''Initializes and cleanup ros node'''
     print("[Watcher]: Starting...")
     ic = ImageFeature(node_name='watcher')
@@ -285,4 +277,4 @@ def main(args):
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()

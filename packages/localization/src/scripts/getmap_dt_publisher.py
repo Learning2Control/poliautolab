@@ -233,7 +233,7 @@ def get_map_server():
     msg = Floats(map)
     while not rospy.is_shutdown():
         publisher.publish(msg)
-        rospy.sleep(1)
+        rospy.sleep(2)
 
 if __name__ == "__main__":
     get_map_server()
