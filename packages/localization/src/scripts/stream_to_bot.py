@@ -177,6 +177,8 @@ class ImageFeature(DTROS):
         # To CV
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        # Change resolution
+        smaller = cv2.resize()
         # Rectify
         remapped = cv2.remap(image_np, self._mapx, self._mapy, cv2.INTER_NEAREST)
         # White balance
