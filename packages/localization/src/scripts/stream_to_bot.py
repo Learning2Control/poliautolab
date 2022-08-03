@@ -8,6 +8,7 @@ Publish using dt_communication.
 __author__ =  'Giulio Vaccari <giulio.vaccari at mail.polimi.it>'
 __version__=  '0.1'
 __license__ = 'MIT'
+
 # Python libs
 import sys, os, copy
 
@@ -58,6 +59,7 @@ def get_car(img):
     """
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
+    # Extract blue and pink colors
     if LOW_RES:
 
         hsv_color1_blue = np.array([87, 117, 170])
@@ -89,23 +91,32 @@ def get_car(img):
         hsv_color2_pink = np.array([200, 100, 250])
         mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
     
+    # Compute the average location the blue and pink colors
     back_coo = np.argwhere(mask_pink==255).mean(axis=0)[::-1]
     if SUPER_LOW_RES:
-        # This is a hack to filter noise
+        # This is a hack to filter noise and be able to use a wide range for blue
         mask_blue = cv2.bitwise_and(cv2.circle(canvas_for_circle, (int(back_coo[0]), int(back_coo[1])), 15, (255), -1), mask_blue)
     front_coo = np.argwhere(mask_blue==255).mean(axis=0)[::-1]
     
+    # Compute the position of the car as the average between the position of the back and front
     x_center = (front_coo[0] + back_coo[0])/2
     y_center = (front_coo[1] + back_coo[1])/2
-
     if np.isnan(x_center):
         print(front_coo[0], back_coo[0])
-    # In the angle computation x and y are inverted because of the image coordinate system
-    angle = np.arctan2(-front_coo[0]+back_coo[0], -front_coo[1]+back_coo[1])
+
+    # Compute the angle of the car
+    angle = np.arctan2(-front_coo[0]+back_coo[0], -front_coo[1]+back_coo[1]) # x and y are inverted because of the image coordinate system
     
     return x_center, y_center, angle
 
 def white_balance(img):
+    """
+    White balance the image using the gray world assumption.
+    
+    :param img: image
+
+    :return: white balanced image
+    """
     result = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     avg_a = np.average(result[:, :, 1])
     avg_b = np.average(result[:, :, 2])
@@ -124,7 +135,7 @@ class ImageFeature(DTROS):
         # Duck name
         self.vehicle = os.environ['VEHICLE_NAME']
 
-        # initialize the DTROS parent class
+        # Initialize the DTROS parent class
         # https://github.com/duckietown/dt-ros-commons/blob/daffy/packages/duckietown/include/duckietown/dtros/constants.py
         super(ImageFeature, self).__init__(node_name=node_name, node_type=NodeType.LOCALIZATION)
 
@@ -203,7 +214,7 @@ class ImageFeature(DTROS):
             return
         start_time = rospy.get_time()
 
-        # To CV
+        # To numpy array
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
@@ -236,6 +247,29 @@ class ImageFeature(DTROS):
         if VERBOSE:
             print("Pixel: x: ", x, "y: ", y)
 
+        # Resize and remove offset
+        x = x*self.scale_x
+        y = y*self.scale_y
+        # offset_x = rospy.get_param('offset_x', 0.3598180360213129)
+        # x -= offset_x
+        # offset_y = rospy.get_param('offset_y', 0.07411439522846053)
+        # y -= offset_y
+        # if not rospy.has_param('offset_x'):
+        #     print("[STREAM_TO_BOT] params not found")
+
+        # Prepare DuckPose message
+        pose = DuckPose()
+        pose.header.stamp = rospy.Time.now()
+        pose.header.frame_id = "watchtower00/localization"
+        pose.x = x
+        pose.y = y
+        pose.theta = theta
+        pose.success = localized
+
+        # Publish duckiebot position and orientation as UDP packet
+        print(f"[Watcher]: publishing x:{x}, y:{y}, theta:{np.rad2deg(theta)}")
+        self.coordinates_dt_publish.publish(pose)
+
         # Publish the processed image for debugging
         if PUB_RECT:
             # NB It is correct wrt to the map, not the image thus we need to flip along y
@@ -249,30 +283,6 @@ class ImageFeature(DTROS):
             msg.data = np.array(cv2.imencode('.jpg', img_to_be_pulished)[1]).tobytes()
             # Publish image
             self.image_pub.publish(msg)
-
-        # Resize and remove offset
-        x = x*self.scale_x
-        y = y*self.scale_y
-        # offset_x = rospy.get_param('offset_x', 0.3598180360213129)
-        # x -= offset_x
-        # offset_y = rospy.get_param('offset_y', 0.07411439522846053)
-        # y -= offset_y
-
-        # if not rospy.has_param('offset_x'):
-        #     print("[STREAM_TO_BOT] params not found")
-
-        # DuckPose
-        pose = DuckPose()
-        pose.header.stamp = rospy.Time.now()
-        pose.header.frame_id = "watchtower00/localization"
-        pose.x = x
-        pose.y = y
-        pose.theta = theta
-        pose.success = localized
-
-        # Publish duckiebot position and orientation as UDP packet
-        print(f"[Watcher]: publishing x:{x}, y:{y}, theta:{np.rad2deg(theta)}")
-        self.coordinates_dt_publish.publish(pose)
 
         # Publish odometry for debugging
         if PUB_ROS:
