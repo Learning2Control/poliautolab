@@ -163,7 +163,6 @@ include_directories(
 catkin_install_python(PROGRAMS
   src/scripts/stream_to_bot.py
   src/scripts/getmap_dt_publisher.py
-  src/scripts/send_image.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

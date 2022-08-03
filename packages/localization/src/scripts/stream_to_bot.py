@@ -33,12 +33,21 @@ from localization.msg import DuckPose
 from dt_communication_utils import DTCommunicationGroup
 from duckietown.dtros import DTROS, NodeType
 
-# from std_msgs.msg import String
+# UDP communication
 group = DTCommunicationGroup('my_position', DuckPose)
 
+#### Params ####
 VERBOSE=False
 PUB_RECT=False
 PUB_ROS=False
+
+#### Resolution params ####
+LOW_RES=False
+SUPER_LOW_RES=True
+assert LOW_RES != SUPER_LOW_RES
+FIX_SCALE = 4 if SUPER_LOW_RES else 3 if LOW_RES else 1
+if SUPER_LOW_RES:
+    canvas_for_circle = np.zeros(shape=(153,195))
 
 def get_car(img):
     """
@@ -47,22 +56,43 @@ def get_car(img):
     :param img: image
     :return: front coord, left coord, theta
     """
-    # scale_percent = 60
-    # width = int(img.shape[1] * scale_percent / 100)
-    # height = int(img.shape[0] * scale_percent / 100)
-    # dim = (width, height)
-    # img = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-    hsv_color1_blue = np.array([80, 180, 110])
-    hsv_color2_blue = np.array([200, 250, 250])
-    mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
+    if LOW_RES:
 
-    hsv_color1_pink = np.array([150, 50, 100])
-    hsv_color2_pink = np.array([200, 100, 250])
-    mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
+        hsv_color1_blue = np.array([87, 117, 170])
+        hsv_color2_blue = np.array([116, 189, 255])
+        mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
+
+        hsv_color1_pink = np.array([130, 40, 190])
+        hsv_color2_pink = np.array([255, 255, 255])
+        mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
+
+    elif SUPER_LOW_RES:
+
+        hsv_color1_blue = np.array([50, 100, 150])
+        hsv_color2_blue = np.array([110, 255, 255]) #[102, 255, 255] without the circle processing
+        mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
+
+        # Pink is the same!
+        hsv_color1_pink = np.array([130, 40, 190])
+        hsv_color2_pink = np.array([255, 255, 255])
+        mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
+
+    else:
+
+        hsv_color1_blue = np.array([80, 180, 110])
+        hsv_color2_blue = np.array([200, 250, 250])
+        mask_blue = cv2.inRange(img_hsv, hsv_color1_blue, hsv_color2_blue)
+
+        hsv_color1_pink = np.array([150, 50, 100])
+        hsv_color2_pink = np.array([200, 100, 250])
+        mask_pink = cv2.inRange(img_hsv, hsv_color1_pink, hsv_color2_pink)
     
     back_coo = np.argwhere(mask_pink==255).mean(axis=0)[::-1]
+    if SUPER_LOW_RES:
+        # This is a hack to filter noise
+        mask_blue = cv2.bitwise_and(cv2.circle(canvas_for_circle, (int(back_coo[0]), int(back_coo[1])), 15, (255), -1), mask_blue)
     front_coo = np.argwhere(mask_blue==255).mean(axis=0)[::-1]
     
     x_center = (front_coo[0] + back_coo[0])/2
@@ -98,39 +128,37 @@ class ImageFeature(DTROS):
         # https://github.com/duckietown/dt-ros-commons/blob/daffy/packages/duckietown/include/duckietown/dtros/constants.py
         super(ImageFeature, self).__init__(node_name=node_name, node_type=NodeType.LOCALIZATION)
 
-        self.rate = rospy.Rate(10)
-
+        # Camera info
         self.rectify_alpha = rospy.get_param("~rectify_alpha", 0.0)
-        # camera info
         self._camera_parameters = None
         self._mapx, self._mapy = None, None
 
-        self.coordinates_dt_publish = group.Publisher()
-
-
+        # Scale factor
         rospy.loginfo('[Watcher]: Waiting for parameter server...')
-        while not rospy.has_param('scale_x'):
-            self.rate.sleep()
-        self.scale_x = rospy.get_param('scale_x', 0.00345041662607739)
-        self.scale_y = rospy.get_param('scale_y', 0.005417244522218992)
+        # while not rospy.has_param('scale_x'):
+        #     self.rate.sleep()
+        # Muktiple by FIX_SCALE to adapt to resolution
+        self.scale_x = 0.00345041662607739*FIX_SCALE #rospy.get_param('scale_x', 0.00345041662607739)
+        self.scale_y = 0.005417244522218992*FIX_SCALE #rospy.get_param('scale_y', 0.005417244522218992)
         rospy.loginfo('[Watcher]: Got params.')
 
-        # subscribed Topic
+        # Publishers
+        self.coordinates_dt_publish = group.Publisher()
+        if PUB_ROS:
+            self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
+            self.odom_broadcaster = tf.TransformBroadcaster()
+        if PUB_RECT:
+            self.image_pub = rospy.Publisher("/watchtower00/image_rectified/compressed", CompressedImage, queue_size=1)
+
+        # Subscribers
         # https://stackoverflow.com/questions/33559200/ros-image-subscriber-lag?rq=1
         self._cinfo_sub = rospy.Subscriber("/watchtower00/camera_node/camera_info",
             CameraInfo, self._cinfo_cb, queue_size=1)
         self.image_subscriber = rospy.Subscriber("/watchtower00/camera_node/image/compressed",
             CompressedImage, self._img_cb, queue_size=1, buff_size=2**24)
 
-        # Publisher
-        if PUB_ROS:
-            self.coordinates_pub = rospy.Publisher("/watchtower00/localization", Odometry, queue_size=1)
-            self.odom_broadcaster = tf.TransformBroadcaster()
-        if PUB_RECT:
-            self.image_pub = rospy.Publisher("/watchtower00/image_rectified/compressed", CompressedImage, queue_size=1)
         if VERBOSE :
-            print("subscribed to /camera/image/compressed")
-        # self.rate.sleep()
+            print("ImageFeature initialized")
 
     def _cinfo_cb(self, msg):
         """
@@ -149,8 +177,8 @@ class ImageFeature(DTROS):
         rect_K, _ = cv2.getOptimalNewCameraMatrix(
             self.camera_model.K, self.camera_model.D, (W, H), self.rectify_alpha
         )
-        # store new camera parameters
-        self._camera_parameters = (rect_K[0, 0], rect_K[1, 1], rect_K[0, 2], rect_K[1, 2])
+        # # store new camera parameters
+        # self._camera_parameters = (rect_K[0, 0], rect_K[1, 1], rect_K[0, 2], rect_K[1, 2])
         # create rectification map
         self._mapx, self._mapy = cv2.initUndistortRectifyMap(
             self.camera_model.K, self.camera_model.D, None, rect_K, (W, H), cv2.CV_32FC1
@@ -171,54 +199,55 @@ class ImageFeature(DTROS):
         :type ros_data: sensor_msgs.msg.CompressedImage
         """
         # make sure we have a rectification map available
-        if self._camera_parameters is None or self._mapx is None or self._mapy is None:
+        if self._mapx is None or self._mapy is None:
             return
+        start_time = rospy.get_time()
 
         # To CV
         np_arr = np.frombuffer(ros_data.data, 'u1')
         image_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        # Change resolution
-        smaller = cv2.resize()
+
         # Rectify
         remapped = cv2.remap(image_np, self._mapx, self._mapy, cv2.INTER_NEAREST)
+
         # White balance
         img = white_balance(remapped)
+
         # Cut image
         W, H = img.shape[1], img.shape[0]
         img = img[int(H*0.15):int(H*0.78), int(W*0.2):int(W*0.8)]
         # MEMO: Img has origin on top left, after the interpolation it will be rotated of 90 degrees, no need to rotate it back
 
+        # Compute position and orientation
         localized = False
-
         try:
             x, y, theta = get_car(img)
             localized = True
         except ValueError:
-            localized = False
             print("No lines found.")
+            localized = False
         
         if np.isnan(x) or np.isnan(y) or np.isnan(theta):
             print("No lines found.")
             localized = False
 
-        # Because of the different methods between map creation and localization x and y are flipped
-        x, y = y, x
+        x, y = y, x # Because of the different methods between map creation and localization x and y are flipped
 
         if VERBOSE:
             print("Pixel: x: ", x, "y: ", y)
 
-
+        # Publish the processed image for debugging
         if PUB_RECT:
             # NB It is correct wrt to the map, not the image thus we need to flip along y
             img_to_be_pulished = copy.deepcopy(img)
-            #### Create CompressedImage ####
+            # Create CompressedImage
             msg = CompressedImage()
             msg.header.stamp = rospy.Time.now()
             msg.format = "jpeg"
             img_to_be_pulished = cv2.rotate(img_to_be_pulished, cv2.ROTATE_90_COUNTERCLOCKWISE)
             cv2.circle(img_to_be_pulished,(int(x), int(img.shape[1]-y)), 25, (0,255,0))
             msg.data = np.array(cv2.imencode('.jpg', img_to_be_pulished)[1]).tobytes()
-            # Publish new image
+            # Publish image
             self.image_pub.publish(msg)
 
         # Resize and remove offset
@@ -241,10 +270,11 @@ class ImageFeature(DTROS):
         pose.theta = theta
         pose.success = localized
 
+        # Publish duckiebot position and orientation as UDP packet
         print(f"[Watcher]: publishing x:{x}, y:{y}, theta:{np.rad2deg(theta)}")
         self.coordinates_dt_publish.publish(pose)
 
-        # Odometry:
+        # Publish odometry for debugging
         if PUB_ROS:
             odom_quat = tf.transformations.quaternion_from_euler(0, 0, theta)
             self.odom_broadcaster.sendTransform(
@@ -268,10 +298,30 @@ class ImageFeature(DTROS):
 
             self.coordinates_pub.publish(odom)
 
+        print("Total time: ", rospy.get_time()-start_time)
+
 def main():
-    '''Initializes and cleanup ros node'''
+    """
+    Main function, initialize node and start the watcher.
+    """
     print("[Watcher]: Starting...")
+
+    # Set resolution level
+    if LOW_RES:
+        rospy.set_param("/watchtower00/camera_node/res_h", 324)
+        rospy.set_param("/watchtower00/camera_node/res_w", 432)
+        while rospy.get_param("/watchtower00/camera_node/res_h") != 324:
+            rospy.sleep(0.1)
+        print("[Watcher]: Low resolution set")
+    elif SUPER_LOW_RES:
+        rospy.set_param("/watchtower00/camera_node/res_h", 243)
+        rospy.set_param("/watchtower00/camera_node/res_w", 324)
+        while rospy.get_param("/watchtower00/camera_node/res_h") != 243:
+            rospy.sleep(0.1)
+        print("[Watcher]: Super low resolution set")
+    
     ic = ImageFeature(node_name='watcher')
+
     try:
         rospy.spin()
     except KeyboardInterrupt:
