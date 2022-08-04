@@ -93,8 +93,10 @@ def get_car(img):
     
     # Compute the average location the blue and pink colors
     back_coo = np.argwhere(mask_pink==255).mean(axis=0)[::-1]
+    if np.isnan(back_coo[0]):
+        raise ValueError('No pink color found')
     if SUPER_LOW_RES:
-        # This is a hack to filter noise and be able to use a wide range for blue
+        # Bounding box to be able to use a wide range for blue
         mask_blue = cv2.bitwise_and(cv2.circle(canvas_for_circle, (int(back_coo[0]), int(back_coo[1])), 15, (255), -1), mask_blue)
     front_coo = np.argwhere(mask_blue==255).mean(axis=0)[::-1]
     
