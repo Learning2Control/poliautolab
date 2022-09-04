@@ -97,7 +97,7 @@ def get_car(img):
         raise ValueError('No pink color found')
     if SUPER_LOW_RES:
         # Bounding box to be able to use a wide range for blue
-        mask_blue = cv2.bitwise_and(cv2.circle(canvas_for_circle, (int(back_coo[0]), int(back_coo[1])), 15, (255), -1), mask_blue)
+        mask_blue = cv2.bitwise_and(cv2.circle(np.zeros_like(mask_blue), (int(back_coo[0]), int(back_coo[1])), 15, (255), -1), mask_blue)
     front_coo = np.argwhere(mask_blue==255).mean(axis=0)[::-1]
     
     # Compute the position of the car as the average between the position of the back and front
@@ -239,6 +239,7 @@ class ImageFeature(DTROS):
         except ValueError:
             print("No lines found.")
             localized = False
+            x, y, theta = -1, -1, -1
         
         if np.isnan(x) or np.isnan(y) or np.isnan(theta):
             print("No lines found.")
