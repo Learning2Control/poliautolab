@@ -142,6 +142,7 @@ def resize_params(points_fitted):
     """
 
     # MEMO for dumb kids: x is row [1] and y is column [0]
+    # this can be improved, should not be min and max but distance along same axis
 
     max_left = np.min(points_fitted[:, 0])
     max_right = np.max(points_fitted[:, 0])

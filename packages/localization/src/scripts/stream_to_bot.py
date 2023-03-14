@@ -253,6 +253,19 @@ class ImageFeature(DTROS):
         # Resize and remove offset
         x = x*self.scale_x
         y = y*self.scale_y
+
+        # Transform to fit updated map
+        leftmost_x = 0.36167528287773865
+        short_coeff_x = 1.2333649447885058
+        x_after_transformation = (x-leftmost_x)*short_coeff_x + leftmost_x
+
+        bottom_y = 0.5875344705138967
+        short_coeff_y = 0.8858931614382081
+        y_after_transformation = (y-bottom_y)*short_coeff_y + bottom_y
+
+        x, y = x_after_transformation, y_after_transformation
+
+        # Remove offset
         # offset_x = rospy.get_param('offset_x', 0.3598180360213129)
         # x -= offset_x
         # offset_y = rospy.get_param('offset_y', 0.07411439522846053)
